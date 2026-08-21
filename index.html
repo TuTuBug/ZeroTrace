@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>零上传工具箱 · 100% 本地运行，0 服务器 0 上传</title>
+  <meta name="description" content="零上传工具箱（ZeroTrace）：147 个隐私工具，全部在你的浏览器本地运行——0 服务器、0 后台上传，你的数据从不出本机。涵盖文本处理、开发编码、颜色图像、CSS 生成器、计算器、密码安全、格式转换、数学计算、实用工具。" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛡️</text></svg>" />
+  <link rel="stylesheet" href="assets/css/style.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap header-inner">
+      <a class="brand" href="#/" data-link>
+        <span class="brand-logo">🛡️</span>
+        <span class="brand-name">零上传工具箱</span>
+        <span class="brand-tag">ZeroTrace</span>
+      </a>
+      <div class="header-actions">
+        <button id="theme-toggle" class="icon-btn" title="切换主题" aria-label="切换主题">🌓</button>
+      </div>
+    </div>
+  </header>
+
+  <section class="hero">
+    <div class="wrap">
+      <h1 class="hero-title">零上传 · 隐私工具箱</h1>
+      <p class="hero-sub">147 个隐私工具，<b>0 服务器 · 0 后台上传</b>，全部在浏览器本地运行，数据从不出本机。</p>
+      <div class="privacy-badges">
+        <span class="pb">🔒 0 服务器</span>
+        <span class="pb">🚫 0 后台上传</span>
+        <span class="pb">💻 100% 本地运行</span>
+        <span class="pb">🛡️ 数据从不出本机</span>
+      </div>
+      <div class="search-box">
+        <span class="search-icon">🔍</span>
+        <input id="search" type="search" placeholder="搜索工具，例如：JSON、二维码、密码、房贷…" autocomplete="off" />
+        <button id="search-clear" class="search-clear" aria-label="清除" hidden>✕</button>
+      </div>
+      <div id="cat-nav" class="cat-nav"></div>
+    </div>
+  </section>
+
+  <main class="wrap main-area">
+    <div id="home-view"></div>
+    <div id="tool-view" hidden></div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap">
+      <p>🛡️ 零上传工具箱 ZeroTrace · 原创实现的中文隐私工具集合 · 纯前端、离线可用、无广告、数据不出本机。</p>
+      <p class="muted">所有计算与处理均在你的浏览器本地完成，不会上传任何数据。</p>
+    </div>
+  </footer>
+
+  <div id="toast" class="toast" hidden></div>
+
+  <script src="vendor/qrcode.js"></script>
+  <script src="vendor/JsBarcode.all.min.js"></script>
+  <script src="assets/js/util.js"></script>
+  <script src="assets/js/tools-text.js"></script>
+  <script src="assets/js/tools-dev.js"></script>
+  <script src="assets/js/tools-color.js"></script>
+  <script src="assets/js/tools-css.js"></script>
+  <script src="assets/js/tools-calc.js"></script>
+  <script src="assets/js/tools-calc2.js"></script>
+  <script src="assets/js/tools-text2.js"></script>
+  <script src="assets/js/tools-gen.js"></script>
+  <script src="assets/js/tools-color2.js"></script>
+  <script src="assets/js/tools-math.js"></script>
+  <script src="assets/js/tools-util.js"></script>
+  <script src="assets/js/app.js"></script>
+</body>
+</html>
