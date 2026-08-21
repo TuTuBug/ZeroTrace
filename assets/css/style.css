@@ -226,6 +226,9 @@ pre.out { margin: 0; }
 /* Footer */
 .site-footer { border-top: 1px solid var(--border-soft); padding: 26px 0 40px; text-align: center; color: var(--text-soft); font-size: 13px; }
 .site-footer .muted { color: var(--text-muted); font-size: 12px; }
+.footer-links { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px 14px; margin-bottom: 14px; }
+.footer-links .fl { color: var(--accent); text-decoration: none; font-size: 13px; padding: 4px 10px; border-radius: 8px; border: 1px solid var(--border-soft); background: var(--bg-card); transition: all .15s ease; }
+.footer-links .fl:hover { border-color: var(--accent); background: var(--accent-soft); }
 
 /* Toast */
 .toast {
