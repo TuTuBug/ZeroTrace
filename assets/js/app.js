@@ -166,6 +166,8 @@
   window.addEventListener('hashchange', route);
 
   /* 启动 */
+  const heroCount = document.getElementById('hero-count');
+  if (heroCount) heroCount.textContent = T.tools.length;
   renderCatNav();
   route();
 

@@ -49,6 +49,30 @@
     return new Blob([header], { type: 'image/x-icon' });
   }
 
+  // 生成真实 BMP（32bit BGRA，top-down，行按 4 字节对齐天然满足）
+  function makeBMP(canvas) {
+    const w = canvas.width, h = canvas.height;
+    const img = canvas.getContext('2d').getImageData(0, 0, w, h).data;
+    const px = new Uint8Array(w * h * 4);
+    for (let i = 0; i < w * h; i++) {
+      px[i * 4] = img[i * 4 + 2]; px[i * 4 + 1] = img[i * 4 + 1]; px[i * 4 + 2] = img[i * 4]; px[i * 4 + 3] = img[i * 4 + 3];
+    }
+    const header = new Uint8Array(14 + 40 + px.length);
+    const dv = new DataView(header.buffer);
+    dv.setUint16(0, 0x4d42, true);            // 'BM'
+    dv.setUint32(2, header.length, true);     // 文件大小
+    dv.setUint32(10, 54, true);               // 像素数据偏移
+    dv.setUint32(14, 40, true);               // BITMAPINFOHEADER
+    dv.setInt32(18, w, true);
+    dv.setInt32(22, -h, true);                // 负高度 = top-down
+    dv.setUint16(26, 1, true);                // planes
+    dv.setUint16(28, 32, true);               // 32bit
+    dv.setUint32(30, 0, true);                // BI_RGB
+    dv.setUint32(34, px.length, true);        // 图像数据大小
+    header.set(px, 54);
+    return new Blob([header], { type: 'image/bmp' });
+  }
+
   // 图片格式转换
   T.register({
     id: 'image-convert', cat: 'conv', icon: '🔁', name: '图片格式转换',
@@ -76,11 +100,13 @@
         <div class="hint" id="cv-note"></div>
       </div>`,
     init: (r) => {
-      const fileIn = r.querySelector('#cv-file'), fmt = r.querySelector('#cv-fmt'), q = r.querySelector('#cv-q'), note = r.querySelector('#cv-note');
+      const fileIn = r.querySelector('#cv-file'), fmtSel = r.querySelector('#cv-fmt'), q = r.querySelector('#cv-q'), note = r.querySelector('#cv-note');
       const cmp = r.querySelector('#cv-cmp'), orig = r.querySelector('#cv-orig'), comp = r.querySelector('#cv-comp');
       const osz = r.querySelector('#cv-osz'), csz = r.querySelector('#cv-csz'), odim = r.querySelector('#cv-odim'), cdim = r.querySelector('#cv-cdim');
-      let curBlob = null, curName = 'image', curExt = 'png', curUrl = '', srcCanvas = null, srcUrl = null;
-      const doDownload = () => { if (curUrl) { const a = document.createElement('a'); a.href = curUrl; a.download = curName + '.' + curExt; a.click(); } };
+      const goBtn = r.querySelector('#cv-go'), dlBtn = r.querySelector('#cv-dl');
+      const fmtSize = b => b < 1024 ? b + ' B' : b < 1048576 ? (b / 1024).toFixed(1) + ' KB' : (b / 1048576).toFixed(2) + ' MB';
+      let curName = 'image', curExt = 'png', curUrl = '', srcCanvas = null, srcUrl = null;
+      dlBtn.onclick = () => { if (curUrl) { const a = document.createElement('a'); a.href = curUrl; a.download = curName + '.' + curExt; a.click(); } };
       fileIn.addEventListener('change', () => {
         const f = fileIn.files[0]; if (!f) return; curName = f.name.replace(/\.[^.]+$/, '');
         if (srcUrl) URL.revokeObjectURL(srcUrl);
@@ -89,28 +115,42 @@
         img.onload = () => {
           const c = document.createElement('canvas'); c.width = img.naturalWidth || img.width; c.height = img.naturalHeight || img.height;
           c.getContext('2d').drawImage(img, 0, 0); srcCanvas = c;
-          r.querySelector('#cv-go').disabled = false; r.querySelector('#cv-dl').disabled = false;
+          goBtn.disabled = false;
           orig.src = srcUrl; cmp.hidden = false;
-          osz.textContent = fmt(f.size / 1024) + ' KB'; odim.textContent = `尺寸 ${c.width} × ${c.height}`; note.textContent = '';
+          osz.textContent = fmtSize(f.size); odim.textContent = `尺寸 ${c.width} × ${c.height}`; note.textContent = '';
         };
         img.onerror = () => { note.textContent = '无法解码该文件（HEIC/TIFF 等需专用解码器，暂不支持）。'; };
         img.src = srcUrl;
       });
-      r.querySelector('#cv-go').onclick = () => {
+      goBtn.onclick = () => {
         if (!srcCanvas) return;
-        const target = fmt.value, quality = clamp(+q.value || 0.92, 0.1, 1);
-        const done = (blob, ext) => {
+        const target = fmtSel.value, quality = clamp(+q.value || 0.92, 0.1, 1);
+        const done = (blob, ext, msg) => {
           if (curUrl) URL.revokeObjectURL(curUrl);
           curUrl = URL.createObjectURL(blob); comp.src = curUrl; cmp.hidden = false;
-          curBlob = blob; curExt = ext;
-          csz.textContent = fmt(blob.size / 1024) + ' KB'; cdim.textContent = `格式 ${ext.toUpperCase()}`;
-          note.textContent = ''; r.querySelector('#cv-dl').disabled = false; r.querySelector('#cv-dl').onclick = doDownload;
+          curExt = ext;
+          csz.textContent = fmtSize(blob.size); cdim.textContent = `格式 ${ext.toUpperCase()}`;
+          note.textContent = msg || ''; dlBtn.disabled = false;
         };
         if (target === 'ico') { done(makeICO(srcCanvas), 'ico'); return; }
-        srcCanvas.toBlob(b => {
-          if (!b) { note.textContent = '当前浏览器不支持将该图编码为 ' + target + '，已回退为 PNG。'; srcCanvas.toBlob(p => done(p, 'png'), 'image/png'); return; }
+        if (target === 'image/bmp') { done(makeBMP(srcCanvas), 'bmp'); return; }
+        // JPEG 无透明通道，先铺白底避免透明区域变黑
+        let cv = srcCanvas;
+        if (target === 'image/jpeg') {
+          cv = document.createElement('canvas'); cv.width = srcCanvas.width; cv.height = srcCanvas.height;
+          const cx = cv.getContext('2d'); cx.fillStyle = '#ffffff'; cx.fillRect(0, 0, cv.width, cv.height); cx.drawImage(srcCanvas, 0, 0);
+        }
+        cv.toBlob(b => {
+          if (!b || b.type !== target) {
+            // 浏览器不支持该编码（如 GIF），toBlob 会静默回退为 PNG
+            srcCanvas.toBlob(p => {
+              if (!p) { note.textContent = '转换失败，请更换格式重试。'; return; }
+              done(p, 'png', '当前浏览器不支持编码为 ' + (target === 'image/gif' ? 'GIF' : target) + '，已回退为 PNG。');
+            }, 'image/png');
+            return;
+          }
           done(b, target.split('/')[1].replace('jpeg', 'jpg'));
-        }, target, (target === 'image/png' || target === 'image/bmp' || target === 'image/gif') ? undefined : quality);
+        }, target, (target === 'image/png') ? undefined : quality);
       };
     }
   });
