@@ -8,9 +8,11 @@
 
 ## 特性
 
-- **147 个工具**，9 大类：文本、开发编码、颜色图像、CSS 生成器、计算器、密码安全、格式转换、数学计算、实用工具
+- **155 个工具**，9 大类：文本、开发编码、颜色图像、CSS 生成器、计算器、密码安全、格式转换、数学计算、实用工具（数量由 `assets/js/app.js` 启动时按注册表动态统计，新增工具无需改文案）
 - **我的常用**：可自定义的首页常用分组（localStorage 持久化）
 - **实时预览**：图片类工具（压缩/缩放/格式转换）选图即见原图与处理后对比；JSON 工具左输入右树形视图
+- **JSON 转义处理**：内容被整体转义时逐层去转义（最多 3 层）；内容本身合法但带 `\/` 这类冗余转义时，一键清理（**嵌套 JSON 内部同样生效**，且不改变数据语义）；字符串里嵌套的 JSON 可在树视图直接展开，视图右上角支持**全部展开 / 全部折叠**
+- **图片工具**：格式转换（含真实 BMP 编码）、压缩、缩放、裁剪、滤镜、加水印、多图拼接、ASCII 字符画、EXIF 信息（含 GPS）查看、Base64
 - **明暗主题**一键切换
 - **纯静态**：无构建步骤，双击 `index.html` 即可用
 - **离线可用**：二维码 `qrcode.js`、条形码 `JsBarcode` 已内置 `vendor/`
@@ -29,8 +31,10 @@ toolbox/
 │       ├── util.js         # 注册表 T、分类表 T.categories、通用辅助函数
 │       ├── app.js          # 首页渲染、搜索、分类切换、hash 路由、常用分组
 │       ├── tools-text.js / tools-text2.js   # 文本工具
-│       ├── tools-dev.js / tools-gen.js      # 开发编码 / 生成器
+│       ├── tools-dev.js / tools-gen.js      # 开发编码（含 JSON 格式化/去转义）/ 生成器
 │       ├── tools-color.js / tools-color2.js # 颜色图像 / 格式转换
+│       ├── tools-media.js  # 图片水印 / 拼接 / ASCII 字符画 / EXIF
+│       ├── tools-pass.js   # 密码安全（生成器 / 强度 / TOTP / 密码短语）
 │       ├── tools-css.js    # CSS 生成器
 │       ├── tools-math.js   # 数学计算
 │       ├── tools-util.js   # 实用工具
@@ -39,6 +43,8 @@ toolbox/
     ├── qrcode.js           # 二维码生成（本地）
     └── JsBarcode.all.min.js# 条形码生成（本地）
 ```
+
+> ⚠️ 新增 `tools-*.js` 后必须在 `index.html` 底部按序补 `<script>`，否则该分类会静默不加载。
 
 ---
 

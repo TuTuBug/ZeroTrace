@@ -98,16 +98,114 @@
     try { JSON.parse(cur); ok = true; } catch (e) {}
     return { ok, text: cur, rounds };
   }
+  /* ---------- 冗余转义清理（内容本身已是合法 JSON 时使用） ----------
+     场景：`{"url":"https:\/\/a.com"}`、嵌套 JSON 串里的 `\/` 等。
+     这些转义在 JSON 里属于冗余（`\/` 等价于 `/`），但 JSON.parse 出来就已经解码了，
+     所以「解析 + 重新序列化」必然生效；为了不打乱用户自己的排版，
+     这里做的是文本级定点替换，只重写需要改动的字符串字面量。 */
+
+  /* 扫描合法 JSON 文本里的字符串字面量，返回 [{start, end, raw}]，raw 为不含首尾引号的转义原文 */
+  function scanJsonStrings(text) {
+    const out = [];
+    let i = 0;
+    while (i < text.length) {
+      if (text[i] !== '"') { i++; continue; }
+      const start = i; i++;
+      let raw = '';
+      while (i < text.length) {
+        const c = text[i];
+        if (c === '\\') { raw += c + (text[i + 1] || ''); i += 2; continue; }
+        if (c === '"') break;
+        raw += c; i++;
+      }
+      out.push({ start, end: i + 1, raw });
+      i++;
+    }
+    return out;
+  }
+
+  /* 去掉冗余的 \/（单个未转义反斜杠 + 斜杠 → 斜杠）；\\ \" \n \uXXXX 等一律原样保留 */
+  function stripRedundantSlash(raw) {
+    let out = '', i = 0;
+    while (i < raw.length) {
+      const c = raw[i];
+      if (c === '\\' && i + 1 < raw.length) {
+        const n = raw[i + 1];
+        if (n === '/') { out += '/'; i += 2; continue; }  // \/ 冗余，丢掉反斜杠
+        out += c + n; i += 2; continue;                   // 其它转义原样保留
+      }
+      out += c; i++;
+    }
+    return out;
+  }
+
+  /* 把文本转回 JSON 字符串字面量的内部原文（不含首尾引号） */
+  function escapeRaw(s) { return JSON.stringify(String(s)).slice(1, -1); }
+
+  /* 统计一段（已解码的）字符串里各层的 \/ 冗余转义数量 */
+  function countSlashEscapes(s) { return (String(s).match(/\\+\//g) || []).length; }
+
+  /* 递归展开嵌套 JSON 并清理其冗余转义；原串是多行（含真实换行）时保持缩进层次 */
+  function cleanDeepJson(val, stat) {
+    if (typeof val === 'string') {
+      const inner = tryNestedJSON(val);
+      if (inner) {
+        stat.unpack++;
+        stat.slash += countSlashEscapes(val);
+        const pretty = /\n/.test(val);
+        return JSON.stringify(cleanDeepJson(inner, stat), null, pretty ? 2 : undefined);
+      }
+      return val;
+    }
+    if (Array.isArray(val)) return val.map(v => cleanDeepJson(v, stat));
+    if (val && typeof val === 'object') {
+      const o = {};
+      for (const k of Object.keys(val)) o[k] = cleanDeepJson(val[k], stat);
+      return o;
+    }
+    return val;
+  }
+
+  /* 清理合法 JSON 文本里的冗余转义（定点替换，保留外围排版）。
+     返回 { changed, text, stat, error }；任何异常都退回原文，绝不交出坏 JSON */
+  function cleanRedundantEscapes(text) {
+    const stat = { slash: 0, unpack: 0 };
+    const lits = scanJsonStrings(text);
+    let out = '', last = 0, changed = false;
+    for (const lit of lits) {
+      let decoded;
+      try { decoded = JSON.parse('"' + lit.raw + '"'); } catch (e) { continue; }
+      let newRaw = lit.raw;
+      if (typeof decoded === 'string') {
+        const inner = tryNestedJSON(decoded);
+        if (inner) {
+          stat.unpack++;
+          stat.slash += countSlashEscapes(decoded);
+          const pretty = /\n/.test(decoded);
+          newRaw = escapeRaw(JSON.stringify(cleanDeepJson(inner, stat), null, pretty ? 2 : undefined));
+        } else {
+          const s = stripRedundantSlash(lit.raw);
+          if (s !== lit.raw) { stat.slash += lit.raw.length - s.length; newRaw = s; }
+        }
+      }
+      if (newRaw !== lit.raw) { out += text.slice(last, lit.start) + '"' + newRaw + '"'; last = lit.end; changed = true; }
+    }
+    out += text.slice(last);
+    if (!changed) return { changed: false, text, stat };
+    try { JSON.parse(out); } catch (e) { return { changed: false, text, stat, error: e.message }; }
+    return { changed: true, text: out, stat };
+  }
+
   const JSON_SAMPLE = JSON.stringify({ name: '工具箱', version: 2, free: true, tools: ['json', 'image', 'css'], meta: { author: 'WorkBuddy', year: 2026, ok: null } }, null, 2);
 
   // 1. JSON 格式化 / 校验 / 树视图
   T.register({
     id: 'json', cat: 'dev', icon: '🧾', name: 'JSON 格式化',
-    desc: '美化 / 压缩 / 校验 / 树视图 / 去转义', keywords: 'json format validate escape unescape 格式化 校验 美化 树 视图 转义 去转义 反转义 嵌套',
+    desc: '美化 / 压缩 / 校验 / 树视图 / 去转义', keywords: 'json format validate escape unescape 格式化 校验 美化 树 视图 转义 去转义 反转义 嵌套 冗余 斜杠 反斜杠 slash 清理',
     render: () => `
       <div class="tool-panel">
         <h2>🧾 JSON 格式化 / 视图</h2>
-        <p class="t-sub">左侧编辑 JSON，右侧实时树形视图（点击 ▾ 折叠/展开）。支持格式化、压缩、校验、<b>去转义 / 转义</b>、清空、复制、示例；字符串里嵌套的 JSON（如接口报文中的 content 字段）可直接展开。</p>
+        <p class="t-sub">左侧编辑 JSON，右侧实时树形视图。支持格式化、压缩、校验、<b>去转义 / 转义</b>、清空、复制、示例；视图右上角可<b>全部展开 / 全部折叠</b>，也可点单个节点的 ▾ 折叠。字符串里嵌套的 JSON（如接口报文中的 content 字段）可直接展开；内容本身合法但带着 <b>\\/</b> 这类冗余转义时，点「去转义」即可清理（嵌套层内部同样生效）。</p>
         <div class="json-split">
           <div class="json-pane">
             <div class="pane-bar">
@@ -116,7 +214,7 @@
                 <button class="mini" data-f="pretty">格式化</button>
                 <button class="mini" data-f="min">压缩</button>
                 <button class="mini" data-f="validate">校验</button>
-                <button class="mini" data-f="unescape" title="去除 \\&quot; \\n \\uXXXX 等转义符，自动识别多层转义">去转义</button>
+                <button class="mini" data-f="unescape" title="合法 JSON：清理字符串里的冗余转义（\\/ → /），嵌套 JSON 内部同样生效；非法 JSON：逐层剥离 \\&quot; \\n \\uXXXX 等转义符，自动识别多层">去转义</button>
                 <button class="mini" data-f="escape" title="把内容转成转义后的字符串字面量，便于嵌入代码/日志">转义</button>
                 <button class="mini" id="j-sample">示例</button>
                 <button class="mini" id="j-copy">复制</button>
@@ -127,7 +225,14 @@
             <div id="j-status" class="j-status"></div>
           </div>
           <div class="json-pane">
-            <div class="pane-bar"><span>JSON 视图（点击 ▾ 折叠 / 展开）</span><span id="j-stat" class="cmp-meta"></span></div>
+            <div class="pane-bar">
+              <span>JSON 视图（点 ▾ 折叠）</span>
+              <div class="j-tools">
+                <span id="j-stat" class="cmp-meta"></span>
+                <button class="mini" id="j-expand" title="展开所有节点">全部展开</button>
+                <button class="mini" id="j-collapse" title="折叠所有节点">全部折叠</button>
+              </div>
+            </div>
             <div id="j-view" class="json-view"></div>
           </div>
         </div>
@@ -144,7 +249,11 @@
           view.innerHTML = jsonTreeNode(obj, null);
           if (obj && typeof obj === 'object') { const c = jsonCount(obj); stat.textContent = `${c.k} 个键 · ${c.n} 个节点`; }
           else stat.textContent = typeof obj === 'string' ? '字符串（非对象）' : typeof obj;
-          setStatus('ok', '✓ 合法 JSON');
+          // 合法 JSON 也可能带着冗余转义（如 \/、嵌套 JSON 串），这里给出可点击的清理入口
+          const chk = cleanRedundantEscapes(txt);
+          setStatus('ok', '✓ 合法 JSON' + (chk.changed
+            ? ` · <span class="j-fix" id="j-fix">检测到 ${chk.stat.slash} 处冗余转义（\\/ → /）${chk.stat.unpack ? `，含 ${chk.stat.unpack} 处嵌套 JSON` : ''}，点此清理</span>`
+            : ''));
         } catch (e) {
           view.innerHTML = '<span class="muted">JSON 有误，修正后自动显示树形</span>';
           stat.textContent = '';
@@ -154,8 +263,6 @@
             ? ` · <span class="j-fix" id="j-fix">检测到 ${fixed.rounds} 层转义，点此去转义</span>`
             : '';
           setStatus('err', '✗ ' + esc(e.message) + tip);
-          const fixEl = status.querySelector('#j-fix');
-          if (fixEl) fixEl.onclick = doUnescape;
         }
       };
       inp.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(render, 180); });
@@ -167,12 +274,23 @@
       r.querySelector('[data-f="pretty"]').onclick = () => parseAnd(o => JSON.stringify(o, null, 2));
       r.querySelector('[data-f="min"]').onclick = () => parseAnd(o => JSON.stringify(o));
       r.querySelector('[data-f="validate"]').onclick = () => { try { JSON.parse(inp.value); setStatus('ok', '✓ JSON 合法'); } catch (e) { setStatus('err', '✗ ' + esc(e.message)); } };
-      // 去转义：逐层剥离 \" \\ \n \uXXXX 等，直到可解析（最多 3 层）
+      // 去转义：合法 JSON → 清理字符串值内部的冗余转义（\/ 等）；非法 JSON → 逐层剥离转义（最多 3 层）
       const doUnescape = () => {
         const raw = inp.value.trim();
         if (!raw) { setStatus('', '请先输入内容'); return; }
+        let valid = false;
+        try { JSON.parse(raw); valid = true; } catch (e) {}
+        if (valid) {
+          const r1 = cleanRedundantEscapes(raw);
+          if (r1.error) { setStatus('err', '✗ 清理后不再是合法 JSON，已放弃改动：' + esc(r1.error)); return; }
+          if (!r1.changed) { setStatus('', '当前内容已是合法 JSON，没有冗余转义（如 \\/）可清理'); return; }
+          inp.value = r1.text;
+          render();
+          setStatus('ok', `✓ 已是合法 JSON；已清理 <b>${r1.stat.slash}</b> 处冗余转义（\\/ → /）`
+            + (r1.stat.unpack ? `，其中展开 <b>${r1.stat.unpack}</b> 处嵌套 JSON` : ''));
+          return;
+        }
         const res = resolveEscaped(raw);
-        if (res.rounds === 0 && res.ok) { setStatus('', '当前内容本身已是合法 JSON，未做改动'); return; }
         if (res.text === raw) { setStatus('err', '未检测到可去除的转义符'); return; }
         inp.value = res.text;
         render();
@@ -191,6 +309,17 @@
       };
       r.querySelector('[data-f="unescape"]').onclick = doUnescape;
       r.querySelector('[data-f="escape"]').onclick = doEscape;
+      // 全部展开 / 全部折叠：一次性切换视图里所有节点的折叠态
+      const setAllCollapsed = (collapse) => {
+        const nodes = view.querySelectorAll('.jt-node');
+        if (!nodes.length) { toast('当前没有可折叠的节点'); return; }
+        nodes.forEach((n) => { collapse ? n.classList.add('collapsed') : n.classList.remove('collapsed'); });
+        toast((collapse ? '已折叠 ' : '已展开 ') + nodes.length + ' 个节点');
+      };
+      r.querySelector('#j-expand').onclick = () => setAllCollapsed(false);
+      r.querySelector('#j-collapse').onclick = () => setAllCollapsed(true);
+      // 状态栏里的「点此清理 / 点此去转义」提示（事件委托，避免每次渲染重复绑定）
+      status.addEventListener('click', (e) => { if (e.target.closest('#j-fix')) doUnescape(); });
       r.querySelector('#j-copy').onclick = () => copyText(inp.value, '已复制');
       r.querySelector('#j-clear').onclick = () => { inp.value = ''; render(); inp.focus(); };
       r.querySelector('#j-sample').onclick = () => { inp.value = JSON_SAMPLE; render(); };
