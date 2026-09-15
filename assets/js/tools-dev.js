@@ -9,6 +9,20 @@
     if (!isObj && !isArr) {
       const cls = val === null ? 'jt-null' : typeof val === 'string' ? 'jt-string' : typeof val === 'number' ? 'jt-number' : 'jt-boolean';
       const txt = val === null ? 'null' : typeof val === 'string' ? '"' + esc(val) + '"' : String(val);
+      // 字符串里嵌套的 JSON（接口报文常见）：可折叠展开为子树
+      if (typeof val === 'string') {
+        const nested = tryNestedJSON(val);
+        if (nested) {
+          const isNestedArr = Array.isArray(nested);
+          const entries = isNestedArr ? nested.map((v, i) => [i, v]) : Object.entries(nested);
+          const c = jsonCount(nested);
+          const kids = entries.map(([k, v]) => jsonTreeNode(v, k)).join('');
+          const raw = val.trim();
+          const preview = raw.length > 40 ? esc(raw.slice(0, 40)) + '…' : esc(raw);
+          const keyPart = key !== null ? `<span class="jt-key">${esc(String(key))}</span>: ` : '';
+          return `<div class="jt-node collapsed">${keyPart}<span class="jt-toggle">▾</span><span class="jt-bracket">"</span><span class="jt-summary">嵌套 JSON · ${c.k} 键 · ${preview}</span><div class="jt-children">${kids}</div><span class="jt-bracket">"</span></div>`;
+        }
+      }
       return `<div class="jt-row">${key !== null ? `<span class="jt-key">${esc(String(key))}</span>: ` : ''}<span class="${cls}">${txt}</span></div>`;
     }
     const entries = isArr ? val.map((v, i) => [i, v]) : Object.entries(val);
@@ -23,16 +37,77 @@
     const walk = (v) => { nodes++; if (v && typeof v === 'object') { if (Array.isArray(v)) v.forEach(walk); else { keys += Object.keys(v).length; Object.values(v).forEach(walk); } } };
     walk(o); return { k: keys, n: nodes };
   }
+
+  /* 探测字符串里嵌套的 JSON 对象/数组 */
+  function tryNestedJSON(s) {
+    const t = String(s).trim();
+    if (t.length < 2) return null;
+    const head = t[0], tail = t[t.length - 1];
+    if (!((head === '{' && tail === '}') || (head === '[' && tail === ']'))) return null;
+    try { const v = JSON.parse(t); return (v && typeof v === 'object') ? v : null; } catch (e) { return null; }
+  }
+
+  /* 单遍反转义：\" \\ \/ \uXXXX \xXX；keepCtrl=true 时保留 \n \r \t \b \f
+     （日志里常见“只转义引号、不转义换行”的串，保留控制符转义才不会破坏 JSON） */
+  function unescapeOnce(s, keepCtrl) {
+    const CH = { '"': '"', "'": "'", '\\': '\\', '/': '/', n: '\n', r: '\r', t: '\t', b: '\b', f: '\f', '0': '\0' };
+    const CTRL = { n: 1, r: 1, t: 1, b: 1, f: 1, '0': 1 };
+    let out = '', i = 0;
+    while (i < s.length) {
+      const c = s[i];
+      if (c === '\\' && i + 1 < s.length) {
+        const n = s[i + 1];
+        if (n === 'u' && /^[0-9a-fA-F]{4}$/.test(s.slice(i + 2, i + 6))) { out += String.fromCharCode(parseInt(s.slice(i + 2, i + 6), 16)); i += 6; continue; }
+        if (n === 'x' && /^[0-9a-fA-F]{2}$/.test(s.slice(i + 2, i + 4))) { out += String.fromCharCode(parseInt(s.slice(i + 2, i + 4), 16)); i += 4; continue; }
+        if (n in CH) { out += (keepCtrl && CTRL[n]) ? '\\' + n : CH[n]; i += 2; continue; }
+      }
+      out += c; i++;
+    }
+    return out;
+  }
+
+  /* 逐层去转义直到可解析（最多 3 层）。
+     每层生成多档候选（解开外层字符串 / 保留控制符转义 / 完整反转义），择优取第一个能解析成功的。 */
+  function resolveEscaped(text) {
+    let cur = String(text).trim(), rounds = 0;
+    // 本身已是合法 JSON，且不是“包着引号的字符串” → 无需改动，避免误伤
+    try {
+      const v0 = JSON.parse(cur);
+      if (typeof v0 !== 'string' || !tryNestedJSON(v0)) return { ok: true, text: cur, rounds: 0 };
+    } catch (e) {}
+    for (let i = 0; i < 3; i++) {
+      let unwrapped = null;
+      try { const v = JSON.parse(cur); if (typeof v === 'string') unwrapped = v; } catch (e) {}
+      const kc = unescapeOnce(cur, true);
+      const full = unescapeOnce(cur, false);
+      const cands = [];
+      if (unwrapped !== null && unwrapped !== cur) cands.push(unwrapped);
+      if (kc !== cur) cands.push(kc);
+      if (full !== cur && full !== kc) cands.push(full);
+      if (!cands.length) break;                       // 已无可去除的转义符
+      let picked = null, parsed = false;
+      for (const c of cands) { try { JSON.parse(c); picked = c; parsed = true; break; } catch (e) {} }
+      if (!picked) picked = cands[0];                 // 都不合法：取最保守的一档，让用户看到结果
+      cur = picked; rounds++;
+      if (parsed) {
+        try { const v = JSON.parse(cur); if (typeof v === 'string' && tryNestedJSON(v)) continue; } catch (e) {}
+        return { ok: true, text: cur, rounds };
+      }
+    }
+    let ok = false;
+    try { JSON.parse(cur); ok = true; } catch (e) {}
+    return { ok, text: cur, rounds };
+  }
   const JSON_SAMPLE = JSON.stringify({ name: '工具箱', version: 2, free: true, tools: ['json', 'image', 'css'], meta: { author: 'WorkBuddy', year: 2026, ok: null } }, null, 2);
 
   // 1. JSON 格式化 / 校验 / 树视图
   T.register({
     id: 'json', cat: 'dev', icon: '🧾', name: 'JSON 格式化',
-    desc: '美化 / 压缩 / 校验 / 树视图', keywords: 'json format validate 格式化 校验 美化 树 视图',
+    desc: '美化 / 压缩 / 校验 / 树视图 / 去转义', keywords: 'json format validate escape unescape 格式化 校验 美化 树 视图 转义 去转义 反转义 嵌套',
     render: () => `
       <div class="tool-panel">
         <h2>🧾 JSON 格式化 / 视图</h2>
-        <p class="t-sub">左侧编辑 JSON，右侧实时树形视图（点击 ▾ 折叠/展开）。支持格式化、压缩、校验、清空、复制、示例。</p>
+        <p class="t-sub">左侧编辑 JSON，右侧实时树形视图（点击 ▾ 折叠/展开）。支持格式化、压缩、校验、<b>去转义 / 转义</b>、清空、复制、示例；字符串里嵌套的 JSON（如接口报文中的 content 字段）可直接展开。</p>
         <div class="json-split">
           <div class="json-pane">
             <div class="pane-bar">
@@ -41,6 +116,8 @@
                 <button class="mini" data-f="pretty">格式化</button>
                 <button class="mini" data-f="min">压缩</button>
                 <button class="mini" data-f="validate">校验</button>
+                <button class="mini" data-f="unescape" title="去除 \\&quot; \\n \\uXXXX 等转义符，自动识别多层转义">去转义</button>
+                <button class="mini" data-f="escape" title="把内容转成转义后的字符串字面量，便于嵌入代码/日志">转义</button>
                 <button class="mini" id="j-sample">示例</button>
                 <button class="mini" id="j-copy">复制</button>
                 <button class="mini" id="j-clear">清空</button>
@@ -58,26 +135,62 @@
     init: (r) => {
       const inp = r.querySelector('#j-in'), view = r.querySelector('#j-view'), status = r.querySelector('#j-status'), stat = r.querySelector('#j-stat');
       let timer = null;
+      const setStatus = (cls, html) => { status.className = 'j-status' + (cls ? ' ' + cls : ''); status.innerHTML = html; };
       const render = () => {
         const txt = inp.value.trim();
-        if (!txt) { view.innerHTML = '<span class="muted">在左侧输入 JSON，这里会显示树形视图</span>'; status.textContent = ''; status.className = 'j-status'; stat.textContent = ''; return; }
+        if (!txt) { view.innerHTML = '<span class="muted">在左侧输入 JSON，这里会显示树形视图</span>'; setStatus('', ''); stat.textContent = ''; return; }
         try {
           const obj = JSON.parse(txt);
           view.innerHTML = jsonTreeNode(obj, null);
-          const c = jsonCount(obj);
-          stat.textContent = `${c.k} 个键 · ${c.n} 个节点`;
-          status.className = 'j-status ok'; status.textContent = '✓ 合法 JSON';
-        } catch (e) { view.innerHTML = '<span class="muted">JSON 有误，修正后自动显示树形</span>'; status.className = 'j-status err'; status.textContent = '✗ ' + e.message; stat.textContent = ''; }
+          if (obj && typeof obj === 'object') { const c = jsonCount(obj); stat.textContent = `${c.k} 个键 · ${c.n} 个节点`; }
+          else stat.textContent = typeof obj === 'string' ? '字符串（非对象）' : typeof obj;
+          setStatus('ok', '✓ 合法 JSON');
+        } catch (e) {
+          view.innerHTML = '<span class="muted">JSON 有误，修正后自动显示树形</span>';
+          stat.textContent = '';
+          // 解析失败时探测是否只是转义问题，给出可点击的一键修复
+          const fixed = resolveEscaped(txt);
+          const tip = (fixed.ok && fixed.rounds > 0)
+            ? ` · <span class="j-fix" id="j-fix">检测到 ${fixed.rounds} 层转义，点此去转义</span>`
+            : '';
+          setStatus('err', '✗ ' + esc(e.message) + tip);
+          const fixEl = status.querySelector('#j-fix');
+          if (fixEl) fixEl.onclick = doUnescape;
+        }
       };
       inp.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(render, 180); });
       view.addEventListener('click', (e) => {
         const t = e.target.closest('.jt-toggle');
         if (t) { const node = t.closest('.jt-node'); if (node) node.classList.toggle('collapsed'); }
       });
-      const parseAnd = (fn) => { try { inp.value = fn(JSON.parse(inp.value)); render(); } catch (e) { status.className = 'j-status err'; status.textContent = '✗ ' + e.message; } };
+      const parseAnd = (fn) => { try { inp.value = fn(JSON.parse(inp.value)); render(); } catch (e) { setStatus('err', '✗ ' + esc(e.message)); } };
       r.querySelector('[data-f="pretty"]').onclick = () => parseAnd(o => JSON.stringify(o, null, 2));
       r.querySelector('[data-f="min"]').onclick = () => parseAnd(o => JSON.stringify(o));
-      r.querySelector('[data-f="validate"]').onclick = () => { try { JSON.parse(inp.value); status.className = 'j-status ok'; status.textContent = '✓ JSON 合法'; } catch (e) { status.className = 'j-status err'; status.textContent = '✗ ' + e.message; } };
+      r.querySelector('[data-f="validate"]').onclick = () => { try { JSON.parse(inp.value); setStatus('ok', '✓ JSON 合法'); } catch (e) { setStatus('err', '✗ ' + esc(e.message)); } };
+      // 去转义：逐层剥离 \" \\ \n \uXXXX 等，直到可解析（最多 3 层）
+      const doUnescape = () => {
+        const raw = inp.value.trim();
+        if (!raw) { setStatus('', '请先输入内容'); return; }
+        const res = resolveEscaped(raw);
+        if (res.rounds === 0 && res.ok) { setStatus('', '当前内容本身已是合法 JSON，未做改动'); return; }
+        if (res.text === raw) { setStatus('err', '未检测到可去除的转义符'); return; }
+        inp.value = res.text;
+        render();
+        if (res.ok) setStatus('ok', `✓ 已去除 ${res.rounds} 层转义，JSON 合法`);
+        else setStatus('err', '✗ 已去转义，但仍不是合法 JSON，请检查内容');
+      };
+      // 转义：把内容转成转义后的字符串字面量（可直接嵌入 Java/JS 代码或日志）
+      const doEscape = () => {
+        const raw = inp.value.trim();
+        if (!raw) { setStatus('', '请先输入内容'); return; }
+        let compact = raw;
+        try { compact = JSON.stringify(JSON.parse(raw)); } catch (e) {}
+        inp.value = JSON.stringify(compact);
+        render();
+        setStatus('ok', '✓ 已转义为字符串字面量（可直接嵌入代码 / 日志）');
+      };
+      r.querySelector('[data-f="unescape"]').onclick = doUnescape;
+      r.querySelector('[data-f="escape"]').onclick = doEscape;
       r.querySelector('#j-copy').onclick = () => copyText(inp.value, '已复制');
       r.querySelector('#j-clear').onclick = () => { inp.value = ''; render(); inp.focus(); };
       r.querySelector('#j-sample').onclick = () => { inp.value = JSON_SAMPLE; render(); };

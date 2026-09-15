@@ -302,6 +302,8 @@ html[data-theme="light"] .cmp-img-box { background-color: #d7dbe3; background-im
 .json-view { padding: 12px; overflow: auto; flex: 1; font-family: var(--mono); font-size: 13px; line-height: 1.55; }
 .j-status { padding: 6px 10px; font-size: 12px; border-top: 1px solid var(--border-soft); background: var(--bg-input); }
 .j-status.ok { color: var(--ok); } .j-status.err { color: var(--danger); }
+.j-fix { color: var(--accent); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.j-fix:hover { color: var(--accent-2); }
 .mini { padding: 4px 9px; font-size: 12px; border-radius: 7px; border: 1px solid var(--border); background: var(--bg-soft); color: var(--text-soft); cursor: pointer; }
 .mini:hover { color: var(--text); border-color: var(--accent); }
 .json-view .muted { color: var(--text-muted); font-style: italic; }
