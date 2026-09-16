@@ -228,25 +228,53 @@
   // OG 预览
   T.register({
     id: 'og-preview', cat: 'dev', icon: '🖼️', name: '分享卡片预览',
-    desc: '预览社交分享卡片效果', keywords: 'og preview 分享 卡片',
+    desc: '预览社交分享卡片效果（封面图走本地，不外发）', keywords: 'og preview 分享 卡片',
     render: () => `
       <div class="tool-panel">
         <h2>🖼️ 分享卡片预览</h2>
-        <p class="t-sub">模拟社交平台的链接分享卡片。</p>
+        <p class="t-sub">模拟社交平台的链接分享卡片。封面图直接从本地选取，既不上传也不会请求外部地址。</p>
         <div class="grid-2">
           <div class="field"><label>标题</label><input type="text" id="og-t" value="一篇很棒的文章"></div>
           <div class="field"><label>来源/域名</label><input type="text" id="og-d" value="example.com"></div>
           <div class="field"><label>描述</label><input type="text" id="og-desc" value="这里是文章的简要描述，会显示在卡片下方。"></div>
-          <div class="field"><label>图片 URL</label><input type="text" id="og-i" value="https://picsum.photos/600/315"></div>
+          <div class="field"><label>封面图（本地图片）</label><input type="file" id="og-file" accept="image/*"></div>
         </div>
         <div class="preview-box"><div style="max-width:480px;width:100%;border:1px solid var(--border);border-radius:12px;overflow:hidden;background:var(--bg-card)">
-          <img id="og-img" src="https://picsum.photos/600/315" style="width:100%;height:200px;object-fit:cover" onerror="this.style.display='none'">
+          <div id="og-ph" style="width:100%;height:200px;background:var(--bg-soft);display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:13px">未选择封面图</div>
+          <img id="og-img" alt="" style="width:100%;height:200px;object-fit:cover;display:none">
           <div style="padding:12px 14px"><div style="font-weight:700;font-size:15px" id="og-tt"></div><div style="color:var(--text-muted);font-size:13px;margin-top:4px" id="og-dd"></div><div style="color:var(--text-muted);font-size:12px;margin-top:6px" id="og-dd2"></div></div>
         </div></div>
+        <div class="btn-row"><button class="btn secondary" id="og-clr">清除封面图</button></div>
       </div>`,
     init: (r) => {
-      const go = () => { r.querySelector('#og-tt').textContent = r.querySelector('#og-t').value; r.querySelector('#og-dd').textContent = r.querySelector('#og-desc').value; r.querySelector('#og-dd2').textContent = r.querySelector('#og-d').value; r.querySelector('#og-img').src = r.querySelector('#og-i').value; };
-      r.querySelectorAll('input').forEach(el => el.addEventListener('input', go)); go();
+      const $ = (s) => r.querySelector(s);
+      const ph = $('#og-ph'), img = $('#og-img');
+      let objUrl = null;
+      const sync = () => {
+        $('#og-tt').textContent = $('#og-t').value;
+        $('#og-dd').textContent = $('#og-desc').value;
+        $('#og-dd2').textContent = $('#og-d').value;
+      };
+      const showPh = () => { img.style.display = 'none'; ph.style.display = 'flex'; };
+      const showImg = () => { img.style.display = 'block'; ph.style.display = 'none'; };
+      const clearImg = () => {
+        if (objUrl) { URL.revokeObjectURL(objUrl); objUrl = null; }
+        img.removeAttribute('src');
+        $('#og-file').value = '';
+        showPh();
+      };
+      $('#og-file').addEventListener('change', (e) => {
+        const f = e.target.files && e.target.files[0];
+        if (!f) return;
+        if (objUrl) URL.revokeObjectURL(objUrl);
+        objUrl = URL.createObjectURL(f);
+        img.src = objUrl;
+        showImg();
+      });
+      img.addEventListener('error', showPh);
+      $('#og-clr').addEventListener('click', clearImg);
+      r.querySelectorAll('input[type="text"]').forEach(el => el.addEventListener('input', sync));
+      sync();
     }
   });
 

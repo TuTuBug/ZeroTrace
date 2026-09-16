@@ -155,11 +155,20 @@
     if (m) openTool(m[1]); else renderHome(mode === 'tool');
   }
 
-  /* 搜索 */
+  /* 搜索（120ms 防抖：避免每次按键都全量重绘上百张卡片） */
+  let searchTimer = null;
   search.addEventListener('input', () => {
-    query = search.value; searchClear.hidden = query === '';
-    if (location.hash && location.hash !== '#/') location.hash = '#/';
-    renderCatNav(); renderHome();
+    query = search.value;
+    searchClear.hidden = query === '';
+    clearTimeout(searchTimer);
+    if (location.hash && location.hash !== '#/') {
+      // 在工具页搜索：必须立刻切回首页。若延迟渲染，中间的 hashchange
+      // 会以 mode==='tool' 调用 renderHome(true)，用首页快照覆盖掉 query。
+      location.hash = '#/';
+      renderCatNav(); renderHome();
+      return;
+    }
+    searchTimer = setTimeout(() => { renderCatNav(); renderHome(); }, 120);
   });
   searchClear.onclick = () => { search.value = ''; query = ''; searchClear.hidden = true; renderHome(); };
 

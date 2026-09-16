@@ -67,9 +67,14 @@ function miniMarkdown(src) {
   s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
        .replace(/\*(.+?)\*/g, '<em>$1</em>')
        .replace(/`([^`]+?)`/g, '<code>$1</code>');
-  s = s.replace(/^\s*[-*] (.*)$/gm, '<li>$1</li>');
-  s = s.replace(/(<li>[\s\S]*?<\/li>)/g, '<ul>$1</ul>');
-  s = s.replace(/^\s*\d+\. (.*)$/gm, '<li>$1</li>');
+  /* 列表：整块捕获「连续同类列表行」，各自合成一个 <ul>/<ol>。
+     必须放在下面的换行转换之前；有序列表也要在这里处理，
+     否则行内标记会被 <br/> 打散，永远拿不到列表容器。 */
+  const liBlock = (tag) => (m) =>
+    '<' + tag + '>' + m.trimEnd().split('\n').map(l => '<li>' + l + '</li>').join('') + '</' + tag + '>';
+  s = s.replace(/(?:^[ \t]*[-*] .*(?:\n|$))+/gm, m => liBlock('ul')(m.replace(/^[ \t]*[-*] /gm, '')));
+  s = s.replace(/(?:^[ \t]*\d+\. .*(?:\n|$))+/gm, m => liBlock('ol')(m.replace(/^[ \t]*\d+\. /gm, '')));
+  s = s.replace(/<\/(ul|ol)>\n/g, '</$1>');
   s = s.replace(/\n{2,}/g, '<br/><br/>').replace(/\n/g, '<br/>');
   return s;
 }
