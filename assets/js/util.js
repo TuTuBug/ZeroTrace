@@ -135,3 +135,39 @@ function relLum(r, g, b) {
   const f = c => { c /= 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
   return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
 }
+
+/* ============ 工具页 DOM 骨架（浏览器与静态页生成脚本共用） ============
+   这里必须是「唯一真源」：app.js 动态进入工具时用它，scripts/gen-static.js
+   预渲染静态页时也用它。两边结构一旦分叉，静态页与运行时页面就会不一致。 */
+
+/* 工具页附加内容：面包屑 + 关于本工具 + 同类工具内链。
+   同类工具用真实 <a href="/tool/<id>/"> 而非 hash，是为了给爬虫一张内链网
+   （hash 链接爬不到，等于没有内链）。 */
+function seoSectionHTML(t) {
+  const TB = window.TB;
+  const cat = TB.categories[t.cat] || { name: '', icon: '' };
+  const same = TB.tools.filter(x => x.cat === t.cat && x.id !== t.id);
+  const kw = String(t.keywords || '').trim().split(/\s+/).filter(Boolean);
+  return `<section class="tb-seo">
+      <h2>关于「${esc(t.name)}」</h2>
+      <p>${esc(t.name)} 属于${esc(cat.name)}，功能是${esc(t.desc)}。本工具完全在你的浏览器本地运行——不上传、不联网、不留痕，数据自始至终不出本机，断网也能使用。</p>
+      ${kw.length ? `<p class="tb-kw">相关关键词：${esc(kw.join('、'))}</p>` : ''}
+      <h3>${esc(cat.name)}下的其他工具</h3>
+      <div class="tb-same">${same.map(x => `<a href="/tool/${encodeURIComponent(x.id)}/">${x.icon} ${esc(x.name)}</a>`).join('') || '<span class="muted">暂无</span>'}</div>
+      <p class="tb-home"><a href="/">← 返回零上传工具箱首页，查看全部 ${TB.tools.length} 个工具</a></p>
+    </section>`;
+}
+
+/* 面包屑（含页面唯一 h1） */
+function crumbHTML(t) {
+  const cat = window.TB.categories[t.cat] || { name: '', icon: '' };
+  return `<div class="tb-crumb"><a href="/">首页</a><span>›</span><span>${esc(cat.icon || '')} ${esc(cat.name)}</span><span>›</span><h1 class="tb-h1">${esc(t.name)}</h1></div>`;
+}
+
+/* 工具视图完整 DOM：#tool-view 的全部子节点 */
+function toolViewHTML(t) {
+  return `<div class="tool-topbar"><button class="tool-back" id="tb-back">← 返回</button><button class="icon-btn" id="tb-theme" title="切换主题" aria-label="切换主题">🌓</button></div>
+    ${crumbHTML(t)}
+    <div id="tb-root" data-tool-id="${esc(t.id)}">${t.render()}</div>
+    ${seoSectionHTML(t)}`;
+}

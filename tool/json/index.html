@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'" />
+  <title>JSON 格式化 - 免费在线开发编码工具 | 零上传工具箱</title>
+  <meta name="description" content="JSON 格式化：美化 / 压缩 / 校验 / 树视图 / 去转义。完全在浏览器本地运行，0 上传、0 服务器，数据不出本机，可离线使用。" />
+  <meta name="keywords" content="JSON 格式化,开发编码,json,format,validate,escape,unescape,格式化,校验,美化,树,视图,转义,去转义,反转义,嵌套,冗余,斜杠,反斜杠,slash,清理,在线工具,免费,本地运行,不上传,零上传" />
+  <meta name="robots" content="index,follow" />
+  <link rel="canonical" href="https://tool.dmi.ccwu.cc/tool/json/" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="零上传工具箱 ZeroTrace" />
+  <meta property="og:locale" content="zh_CN" />
+  <meta property="og:title" content="JSON 格式化 · 零上传工具箱" />
+  <meta property="og:description" content="JSON 格式化：美化 / 压缩 / 校验 / 树视图 / 去转义。完全在浏览器本地运行，0 上传、0 服务器，数据不出本机，可离线使用。" />
+  <meta property="og:url" content="https://tool.dmi.ccwu.cc/tool/json/" />
+  <meta property="og:image" content="https://tool.dmi.ccwu.cc/assets/og-cover.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="JSON 格式化 · 零上传工具箱" />
+  <meta name="twitter:description" content="JSON 格式化：美化 / 压缩 / 校验 / 树视图 / 去转义。完全在浏览器本地运行，0 上传、0 服务器，数据不出本机，可离线使用。" />
+  <meta name="twitter:image" content="https://tool.dmi.ccwu.cc/assets/og-cover.png" />
+  <meta name="theme-color" content="#0f1117" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛡️</text></svg>" />
+  <link rel="stylesheet" href="/assets/css/style.css?v=20260916b" />
+</head>
+<body class="tool-open">
+  <main class="wrap main-area">
+    <div id="home-view" hidden></div>
+    <div id="tool-view"><div class="tool-topbar"><button class="tool-back" id="tb-back">← 返回</button><button class="icon-btn" id="tb-theme" title="切换主题" aria-label="切换主题">🌓</button></div>
+    <div class="tb-crumb"><a href="/">首页</a><span>›</span><span>💻 开发编码</span><span>›</span><h1 class="tb-h1">JSON 格式化</h1></div>
+    <div id="tb-root" data-tool-id="json">
+      <div class="tool-panel">
+        <h2>🧾 JSON 格式化 / 视图</h2>
+        <p class="t-sub">左侧编辑 JSON，右侧实时树形视图。支持格式化、压缩、校验、<b>去转义 / 转义</b>、清空、复制、示例；视图右上角可<b>全部展开 / 全部折叠</b>，也可点单个节点的 ▾ 折叠。字符串里嵌套的 JSON（如接口报文中的 content 字段）可直接展开；内容本身合法但带着 <b>\/</b> 这类冗余转义时，点「去转义」即可清理（嵌套层内部同样生效）。</p>
+        <div class="json-split">
+          <div class="json-pane">
+            <div class="pane-bar">
+              <span>JSON 输入</span>
+              <div class="btn-row" style="margin:0">
+                <button class="mini" data-f="pretty">格式化</button>
+                <button class="mini" data-f="min">压缩</button>
+                <button class="mini" data-f="validate">校验</button>
+                <button class="mini" data-f="unescape" title="合法 JSON：清理字符串里的冗余转义（\/ → /），嵌套 JSON 内部同样生效；非法 JSON：逐层剥离 \&quot; \n \uXXXX 等转义符，自动识别多层">去转义</button>
+                <button class="mini" data-f="escape" title="把内容转成转义后的字符串字面量，便于嵌入代码/日志">转义</button>
+                <button class="mini" id="j-sample">示例</button>
+                <button class="mini" id="j-copy">复制</button>
+                <button class="mini" id="j-clear">清空</button>
+              </div>
+            </div>
+            <textarea id="j-in" spellcheck="false" placeholder='{"name":"工具箱","ok":true}'>{
+  "name": "工具箱",
+  "version": 2,
+  "free": true,
+  "tools": [
+    "json",
+    "image",
+    "css"
+  ],
+  "meta": {
+    "author": "WorkBuddy",
+    "year": 2026,
+    "ok": null
+  }
+}</textarea>
+            <div id="j-status" class="j-status"></div>
+          </div>
+          <div class="json-pane">
+            <div class="pane-bar">
+              <span>JSON 视图（点 ▾ 折叠）</span>
+              <div class="j-tools">
+                <span id="j-stat" class="cmp-meta"></span>
+                <button class="mini" id="j-expand" title="展开所有节点">全部展开</button>
+                <button class="mini" id="j-collapse" title="折叠所有节点">全部折叠</button>
+              </div>
+            </div>
+            <div id="j-view" class="json-view"></div>
+          </div>
+        </div>
+      </div></div>
+    <section class="tb-seo">
+      <h2>关于「JSON 格式化」</h2>
+      <p>JSON 格式化 属于开发编码，功能是美化 / 压缩 / 校验 / 树视图 / 去转义。本工具完全在你的浏览器本地运行——不上传、不联网、不留痕，数据自始至终不出本机，断网也能使用。</p>
+      <p class="tb-kw">相关关键词：json、format、validate、escape、unescape、格式化、校验、美化、树、视图、转义、去转义、反转义、嵌套、冗余、斜杠、反斜杠、slash、清理</p>
+      <h3>开发编码下的其他工具</h3>
+      <div class="tb-same"><a href="/tool/base64/">🔣 Base64 编解码</a><a href="/tool/uuid/">🆔 UUID 生成</a><a href="/tool/unit/">📐 单位换算</a><a href="/tool/regex/">🧬 正则测试</a><a href="/tool/html-min/">🌐 HTML 压缩</a><a href="/tool/css-min/">🎨 CSS 压缩</a><a href="/tool/js-min/">📜 JS 压缩</a><a href="/tool/timestamp/">⏱️ 时间戳转换</a><a href="/tool/hash/">🔐 哈希生成</a><a href="/tool/jwt/">🎫 JWT 解码</a><a href="/tool/url/">🔗 URL 编解码</a><a href="/tool/cron/">⏰ Cron 表达式</a><a href="/tool/entity/">🔤 HTML 实体</a><a href="/tool/chmod/">🛡️ Chmod 计算</a><a href="/tool/json-csv/">📊 JSON 转 CSV</a><a href="/tool/slug/">🪪 URL Slug 生成</a><a href="/tool/barcode/">🔖 条形码生成</a><a href="/tool/clip-path/">✂️ Clip-Path 生成</a><a href="/tool/cubic-bezier/">〰️ 缓动曲线生成</a><a href="/tool/transform/">🔧 Transform 生成</a><a href="/tool/html-table/">📊 HTML 表格生成</a><a href="/tool/meta-tag/">🌐 Meta 标签生成</a><a href="/tool/robots/">🤖 Robots.txt 生成</a><a href="/tool/og-preview/">🖼️ 分享卡片预览</a><a href="/tool/favicon/">🟡 Favicon 生成</a><a href="/tool/svg-blob/">💠 Blob 形状生成</a><a href="/tool/svg-wave/">🌊 波浪形状生成</a><a href="/tool/noise/">🌫️ 噪声纹理生成</a><a href="/tool/pixel-art/">🟦 像素画板</a><a href="/tool/json-validator/">✅ JSON 校验</a></div>
+      <p class="tb-home"><a href="/">← 返回零上传工具箱首页，查看全部 155 个工具</a></p>
+    </section></div>
+  </main>
+
+  <div id="toast" class="toast" hidden></div>
+
+  <script src="/vendor/qrcode.js?v=20260916b"></script>
+  <script src="/vendor/JsBarcode.all.min.js?v=20260916b"></script>
+  <script src="/assets/js/util.js?v=20260916b"></script>
+  <script src="/assets/js/tools-text.js?v=20260916b"></script>
+  <script src="/assets/js/tools-dev.js?v=20260916b"></script>
+  <script src="/assets/js/tools-color.js?v=20260916b"></script>
+  <script src="/assets/js/tools-css.js?v=20260916b"></script>
+  <script src="/assets/js/tools-calc.js?v=20260916b"></script>
+  <script src="/assets/js/tools-calc2.js?v=20260916b"></script>
+  <script src="/assets/js/tools-text2.js?v=20260916b"></script>
+  <script src="/assets/js/tools-gen.js?v=20260916b"></script>
+  <script src="/assets/js/tools-color2.js?v=20260916b"></script>
+  <script src="/assets/js/tools-math.js?v=20260916b"></script>
+  <script src="/assets/js/tools-pass.js?v=20260916b"></script>
+  <script src="/assets/js/tools-media.js?v=20260916b"></script>
+  <script src="/assets/js/tools-util.js?v=20260916b"></script>
+  <script src="/assets/js/app.js?v=20260916b"></script>
+</body>
+</html>

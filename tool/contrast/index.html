@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'" />
+  <title>对比度检查 - 免费在线颜色图像工具 | 零上传工具箱</title>
+  <meta name="description" content="对比度检查：WCAG 文字/背景对比度。完全在浏览器本地运行，0 上传、0 服务器，数据不出本机，可离线使用。" />
+  <meta name="keywords" content="对比度检查,颜色图像,contrast,wcag,对比度,可访问性,在线工具,免费,本地运行,不上传,零上传" />
+  <meta name="robots" content="index,follow" />
+  <link rel="canonical" href="https://tool.dmi.ccwu.cc/tool/contrast/" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="零上传工具箱 ZeroTrace" />
+  <meta property="og:locale" content="zh_CN" />
+  <meta property="og:title" content="对比度检查 · 零上传工具箱" />
+  <meta property="og:description" content="对比度检查：WCAG 文字/背景对比度。完全在浏览器本地运行，0 上传、0 服务器，数据不出本机，可离线使用。" />
+  <meta property="og:url" content="https://tool.dmi.ccwu.cc/tool/contrast/" />
+  <meta property="og:image" content="https://tool.dmi.ccwu.cc/assets/og-cover.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="对比度检查 · 零上传工具箱" />
+  <meta name="twitter:description" content="对比度检查：WCAG 文字/背景对比度。完全在浏览器本地运行，0 上传、0 服务器，数据不出本机，可离线使用。" />
+  <meta name="twitter:image" content="https://tool.dmi.ccwu.cc/assets/og-cover.png" />
+  <meta name="theme-color" content="#0f1117" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛡️</text></svg>" />
+  <link rel="stylesheet" href="/assets/css/style.css?v=20260916b" />
+</head>
+<body class="tool-open">
+  <main class="wrap main-area">
+    <div id="home-view" hidden></div>
+    <div id="tool-view"><div class="tool-topbar"><button class="tool-back" id="tb-back">← 返回</button><button class="icon-btn" id="tb-theme" title="切换主题" aria-label="切换主题">🌓</button></div>
+    <div class="tb-crumb"><a href="/">首页</a><span>›</span><span>🎨 颜色图像</span><span>›</span><h1 class="tb-h1">对比度检查</h1></div>
+    <div id="tb-root" data-tool-id="contrast">
+      <div class="tool-panel"><h2>⚖️ 对比度检查（WCAG）</h2>
+      <div class="row">
+        <div class="field" style="max-width:160px"><label>前景色</label><input type="color" id="ct-fg" class="color-input" value="#111111"></div>
+        <div class="field" style="max-width:160px"><label>背景色</label><input type="color" id="ct-bg" class="color-input" value="#6d7dff"></div>
+      </div>
+      <div class="field"><label>对比度比值</label><div class="out" id="ct-ratio"></div></div>
+      <div class="preview-box" id="ct-prev" style="margin:8px 0"></div>
+      <div id="ct-res"></div></div></div>
+    <section class="tb-seo">
+      <h2>关于「对比度检查」</h2>
+      <p>对比度检查 属于颜色图像，功能是WCAG 文字/背景对比度。本工具完全在你的浏览器本地运行——不上传、不联网、不留痕，数据自始至终不出本机，断网也能使用。</p>
+      <p class="tb-kw">相关关键词：contrast、wcag、对比度、可访问性</p>
+      <h3>颜色图像下的其他工具</h3>
+      <div class="tb-same"><a href="/tool/color-converter/">🎨 颜色转换</a><a href="/tool/palette/">🌈 调色板生成</a><a href="/tool/shades/">🟪 颜色明暗</a><a href="/tool/img-base64/">🖼️ 图片转 Base64</a><a href="/tool/placeholder/">📦 占位图生成</a><a href="/tool/aspect/">📐 宽高比计算</a><a href="/tool/eyedropper/">💉 图片取色</a><a href="/tool/img-compress/">🗜️ 图片压缩</a><a href="/tool/img-resize/">🔍 图片缩放</a><a href="/tool/color-mixer/">🎨 颜色混合</a><a href="/tool/image-filters/">🎚️ 图片滤镜</a><a href="/tool/image-crop/">✂️ 图片裁剪</a><a href="/tool/image-watermark/">💧 图片加水印</a><a href="/tool/image-stitch/">🧵 图片拼接</a><a href="/tool/img-ascii/">🔡 图片转字符画</a></div>
+      <p class="tb-home"><a href="/">← 返回零上传工具箱首页，查看全部 155 个工具</a></p>
+    </section></div>
+  </main>
+
+  <div id="toast" class="toast" hidden></div>
+
+  <script src="/vendor/qrcode.js?v=20260916b"></script>
+  <script src="/vendor/JsBarcode.all.min.js?v=20260916b"></script>
+  <script src="/assets/js/util.js?v=20260916b"></script>
+  <script src="/assets/js/tools-text.js?v=20260916b"></script>
+  <script src="/assets/js/tools-dev.js?v=20260916b"></script>
+  <script src="/assets/js/tools-color.js?v=20260916b"></script>
+  <script src="/assets/js/tools-css.js?v=20260916b"></script>
+  <script src="/assets/js/tools-calc.js?v=20260916b"></script>
+  <script src="/assets/js/tools-calc2.js?v=20260916b"></script>
+  <script src="/assets/js/tools-text2.js?v=20260916b"></script>
+  <script src="/assets/js/tools-gen.js?v=20260916b"></script>
+  <script src="/assets/js/tools-color2.js?v=20260916b"></script>
+  <script src="/assets/js/tools-math.js?v=20260916b"></script>
+  <script src="/assets/js/tools-pass.js?v=20260916b"></script>
+  <script src="/assets/js/tools-media.js?v=20260916b"></script>
+  <script src="/assets/js/tools-util.js?v=20260916b"></script>
+  <script src="/assets/js/app.js?v=20260916b"></script>
+</body>
+</html>

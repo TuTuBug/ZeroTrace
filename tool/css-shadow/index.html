@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'" />
+  <title>阴影生成器 - 免费在线CSS 生成器 | 零上传工具箱</title>
+  <meta name="description" content="阴影生成器：box-shadow 参数可视化。完全在浏览器本地运行，0 上传、0 服务器，数据不出本机，可离线使用。" />
+  <meta name="keywords" content="阴影生成器,CSS 生成器,box-shadow,shadow,阴影,在线工具,免费,本地运行,不上传,零上传" />
+  <meta name="robots" content="index,follow" />
+  <link rel="canonical" href="https://tool.dmi.ccwu.cc/tool/css-shadow/" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="零上传工具箱 ZeroTrace" />
+  <meta property="og:locale" content="zh_CN" />
+  <meta property="og:title" content="阴影生成器 · 零上传工具箱" />
+  <meta property="og:description" content="阴影生成器：box-shadow 参数可视化。完全在浏览器本地运行，0 上传、0 服务器，数据不出本机，可离线使用。" />
+  <meta property="og:url" content="https://tool.dmi.ccwu.cc/tool/css-shadow/" />
+  <meta property="og:image" content="https://tool.dmi.ccwu.cc/assets/og-cover.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="阴影生成器 · 零上传工具箱" />
+  <meta name="twitter:description" content="阴影生成器：box-shadow 参数可视化。完全在浏览器本地运行，0 上传、0 服务器，数据不出本机，可离线使用。" />
+  <meta name="twitter:image" content="https://tool.dmi.ccwu.cc/assets/og-cover.png" />
+  <meta name="theme-color" content="#0f1117" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛡️</text></svg>" />
+  <link rel="stylesheet" href="/assets/css/style.css?v=20260916b" />
+</head>
+<body class="tool-open">
+  <main class="wrap main-area">
+    <div id="home-view" hidden></div>
+    <div id="tool-view"><div class="tool-topbar"><button class="tool-back" id="tb-back">← 返回</button><button class="icon-btn" id="tb-theme" title="切换主题" aria-label="切换主题">🌓</button></div>
+    <div class="tb-crumb"><a href="/">首页</a><span>›</span><span>🧩 CSS 生成器</span><span>›</span><h1 class="tb-h1">阴影生成器</h1></div>
+    <div id="tb-root" data-tool-id="css-shadow">
+      <div class="tool-panel"><h2>🌑 阴影生成器</h2>
+      <div class="grid-3">
+        <div class="field"><label>水平位移</label><input type="range" id="s-x" min="-50" max="50" value="8"></div>
+        <div class="field"><label>垂直位移</label><input type="range" id="s-y" min="-50" max="50" value="12"></div>
+        <div class="field"><label>模糊</label><input type="range" id="s-b" min="0" max="100" value="30"></div>
+        <div class="field"><label>扩散</label><input type="range" id="s-s" min="-30" max="30" value="0"></div>
+        <div class="field" style="max-width:140px"><label>颜色</label><input type="color" id="s-c" class="color-input" value="#000000"></div>
+        <div class="field"><label>不透明度</label><input type="range" id="s-o" min="0" max="100" value="25"></div>
+      </div>
+      <label style="display:flex;gap:6px;align-items:center;color:var(--text-soft);font-size:13px"><input type="checkbox" id="s-in"> 内阴影 (inset)</label>
+      <div class="preview-box" style="margin:12px 0"><div id="s-prev" style="width:120px;height:120px;background:#fff;border-radius:14px"></div></div>
+      <div id="s-code"></div></div></div>
+    <section class="tb-seo">
+      <h2>关于「阴影生成器」</h2>
+      <p>阴影生成器 属于CSS 生成器，功能是box-shadow 参数可视化。本工具完全在你的浏览器本地运行——不上传、不联网、不留痕，数据自始至终不出本机，断网也能使用。</p>
+      <p class="tb-kw">相关关键词：box-shadow、shadow、阴影</p>
+      <h3>CSS 生成器下的其他工具</h3>
+      <div class="tb-same"><a href="/tool/css-gradient/">🌈 渐变生成器</a><a href="/tool/css-radius/">⬭ 圆角生成器</a><a href="/tool/css-glass/">🪟 玻璃拟态</a><a href="/tool/css-flex/">📏 Flex 布局</a><a href="/tool/css-grid/">🔲 Grid 布局</a><a href="/tool/css-tshadow/">🔤 文本阴影</a><a href="/tool/css-pattern/">🔳 背景图案</a></div>
+      <p class="tb-home"><a href="/">← 返回零上传工具箱首页，查看全部 155 个工具</a></p>
+    </section></div>
+  </main>
+
+  <div id="toast" class="toast" hidden></div>
+
+  <script src="/vendor/qrcode.js?v=20260916b"></script>
+  <script src="/vendor/JsBarcode.all.min.js?v=20260916b"></script>
+  <script src="/assets/js/util.js?v=20260916b"></script>
+  <script src="/assets/js/tools-text.js?v=20260916b"></script>
+  <script src="/assets/js/tools-dev.js?v=20260916b"></script>
+  <script src="/assets/js/tools-color.js?v=20260916b"></script>
+  <script src="/assets/js/tools-css.js?v=20260916b"></script>
+  <script src="/assets/js/tools-calc.js?v=20260916b"></script>
+  <script src="/assets/js/tools-calc2.js?v=20260916b"></script>
+  <script src="/assets/js/tools-text2.js?v=20260916b"></script>
+  <script src="/assets/js/tools-gen.js?v=20260916b"></script>
+  <script src="/assets/js/tools-color2.js?v=20260916b"></script>
+  <script src="/assets/js/tools-math.js?v=20260916b"></script>
+  <script src="/assets/js/tools-pass.js?v=20260916b"></script>
+  <script src="/assets/js/tools-media.js?v=20260916b"></script>
+  <script src="/assets/js/tools-util.js?v=20260916b"></script>
+  <script src="/assets/js/app.js?v=20260916b"></script>
+</body>
+</html>

@@ -33,21 +33,26 @@
   /* 主题 */
   const savedTheme = localStorage.getItem('tb-theme') || 'dark';
   document.documentElement.setAttribute('data-theme', savedTheme);
-  document.getElementById('theme-toggle').onclick = () => {
+  function toggleTheme() {
     const cur = document.documentElement.getAttribute('data-theme');
     const next = cur === 'dark' ? 'light' : 'dark';
     document.documentElement.setAttribute('data-theme', next);
     localStorage.setItem('tb-theme', next);
-  };
+  }
+  const themeBtn = document.getElementById('theme-toggle');
+  if (themeBtn) themeBtn.onclick = toggleTheme;
 
   /* 分类导航（含「我的常用」） */
   function renderCatNav() {
+    if (!catNav) return; // 静态工具页没有首页外壳
     const chips = [['all', '全部', '🧰'], ['fav', '我的常用', '⭐', favs.length]];
     Object.entries(T.categories).forEach(([k, v]) => chips.push([k, v.name, v.icon]));
     catNav.innerHTML = chips.map(([k, name, ico, cnt]) =>
       `<span class="cat-chip ${k === curCat ? 'active' : ''}" data-cat="${k}">${ico} ${name}${cnt != null ? ` (${cnt})` : ''}</span>`).join('');
     catNav.querySelectorAll('[data-cat]').forEach(el => el.onclick = () => {
-      curCat = el.dataset.cat; query = ''; search.value = ''; searchClear.hidden = true;
+      curCat = el.dataset.cat; query = '';
+      if (search) search.value = '';
+      if (searchClear) searchClear.hidden = true;
       renderCatNav(); renderHome();
     });
   }
@@ -75,7 +80,7 @@
   function attachCardHandlers() {
     homeView.querySelectorAll('[data-id]').forEach(el => el.onclick = (e) => {
       if (e.target.closest('[data-fav]')) return; // 点的是收藏星标，不打开工具
-      location.hash = '#/tool/' + el.dataset.id;
+      nav('/tool/' + encodeURIComponent(el.dataset.id) + '/');
     });
     homeView.querySelectorAll('[data-fav]').forEach(el => el.onclick = (e) => { e.stopPropagation(); toggleFav(el.dataset.fav); });
   }
@@ -96,8 +101,8 @@
     if (returning && homeState) {
       curCat = homeState.curCat;
       query = homeState.query;
-      search.value = homeState.search;
-      searchClear.hidden = query === '';
+      if (search) search.value = homeState.search;
+      if (searchClear) searchClear.hidden = query === '';
     }
     renderCatNav();
     toolView.hidden = true; homeView.hidden = false;
@@ -128,58 +133,100 @@
   /* 工具页 */
   function openTool(id) {
     const t = T.tools.find(x => x.id === id);
-    if (!t) { location.hash = '#/'; return; }
+    if (!t) {
+      /* 未知工具 ID：直接回首页，别把用户/爬虫留在白屏上 */
+      if (canPush) { try { history.replaceState({}, '', '/'); } catch (e) {} }
+      renderHome(false);
+      return;
+    }
+    let root = toolView.querySelector('#tb-root');
+    const sameTool = root && root.dataset.toolId === id;
+    /* 同一工具已渲染（hashchange 与 popstate 会重复触发路由）→ 不重复 init，
+       否则带 setInterval / canvas 的工具会被初始化两次 */
+    if (sameTool && mode === 'tool') { window.scrollTo(0, 0); return; }
+
     // 进入前记录首页状态，供返回时还原
-    homeState = { curCat, query, search: search.value, scrollY: window.scrollY };
+    homeState = { curCat, query, search: search ? search.value : '', scrollY: window.scrollY };
     document.body.classList.add('tool-open');
     toolView.hidden = false; homeView.hidden = true;
-    toolView.innerHTML = `<div class="tool-topbar"><button class="tool-back" id="tb-back">← 返回</button><button class="icon-btn" id="tb-theme" title="切换主题" aria-label="切换主题">🌓</button></div><div id="tb-root"></div>`;
-    const root = toolView.querySelector('#tb-root');
-    root.innerHTML = t.render();
-    try { t.init(root); } catch (e) { root.innerHTML += `<div class="out err">工具初始化出错：${esc(e.message)}</div>`; }
-    toolView.querySelector('#tb-back').onclick = () => { location.hash = '#/'; };
-    toolView.querySelector('#tb-theme').onclick = () => {
-      const cur = document.documentElement.getAttribute('data-theme');
-      const next = cur === 'dark' ? 'light' : 'dark';
-      document.documentElement.setAttribute('data-theme', next);
-      localStorage.setItem('tb-theme', next);
-    };
+
+    if (!sameTool) {
+      /* 未预渲染（或目标工具与当前预渲染页不符）→ 现场构建。
+         走 toolViewHTML()，与静态页生成脚本同源，保证两边 DOM 完全一致。 */
+      toolView.innerHTML = toolViewHTML(t);
+      root = toolView.querySelector('#tb-root');
+    }
+    /* 静态预渲染页已带 DOM，这里只补事件绑定 */
+    try { t.init(root); } catch (e) { root.insertAdjacentHTML('beforeend', `<div class="out err">工具初始化出错：${esc(e.message)}</div>`); }
+
+    const back = toolView.querySelector('#tb-back');
+    if (back) back.onclick = () => nav('/');
+    const tbTheme = toolView.querySelector('#tb-theme');
+    if (tbTheme) tbTheme.onclick = toggleTheme;
     mode = 'tool';
     window.scrollTo(0, 0);
   }
 
-  /* 路由 */
+  /* 路由解析：干净路径 /tool/<id>/ 优先，其次兼容老的 #/tool/<id> */
+  function parseRoute() {
+    const p = (location.pathname || '/').replace(/\/+$/, '') || '/';
+    let m = p.match(/^\/tool\/([^/]+)$/);
+    if (m) return decodeURIComponent(m[1]);
+    const h = (location.hash || '#/').replace(/\/+$/, '');
+    m = h.match(/^#\/tool\/([^/]+)$/);
+    if (m) return decodeURIComponent(m[1]);
+    return null;
+  }
+
+  /* 导航：优先 History API（干净 URL 才好被搜索引擎收录）；
+     pushState 不可用时（如 file:// 直接打开）自动退化为 hash */
+  let canPush = true;
+  /* file:// 直接打开时 replaceState/pushState 会抛 SecurityError → 提前探测并退化到 hash */
+  try { history.replaceState(history.state, '', location.href); } catch (e) { canPush = false; }
+  function nav(path) {
+    if (canPush) {
+      try { history.pushState({}, '', path); route(); return; }
+      catch (e) { canPush = false; }
+    }
+    location.hash = '#' + path;
+  }
+
   function route() {
-    const h = location.hash || '#/';
-    const m = h.match(/^#\/tool\/(.+)$/);
-    if (m) openTool(m[1]); else renderHome(mode === 'tool');
+    const id = parseRoute();
+    if (id) openTool(id); else renderHome(mode === 'tool');
   }
 
   /* 搜索（120ms 防抖：避免每次按键都全量重绘上百张卡片） */
   let searchTimer = null;
-  search.addEventListener('input', () => {
+  if (search) search.addEventListener('input', () => {
     query = search.value;
-    searchClear.hidden = query === '';
+    if (searchClear) searchClear.hidden = query === '';
     clearTimeout(searchTimer);
-    if (location.hash && location.hash !== '#/') {
-      // 在工具页搜索：必须立刻切回首页。若延迟渲染，中间的 hashchange
+    if (mode === 'tool') {
+      // 在工具页搜索：必须立刻切回首页。若延迟渲染，中间的路由回调
       // 会以 mode==='tool' 调用 renderHome(true)，用首页快照覆盖掉 query。
-      location.hash = '#/';
+      nav('/');
       renderCatNav(); renderHome();
       return;
     }
     searchTimer = setTimeout(() => { renderCatNav(); renderHome(); }, 120);
   });
-  searchClear.onclick = () => { search.value = ''; query = ''; searchClear.hidden = true; renderHome(); };
+  if (searchClear) searchClear.onclick = () => { search.value = ''; query = ''; searchClear.hidden = true; renderHome(); };
 
   window.addEventListener('hashchange', route);
+  window.addEventListener('popstate', route);
 
   /* 启动 */
   const heroCount = document.getElementById('hero-count');
   if (heroCount) heroCount.textContent = T.tools.length;
+  /* 老的 hash 链接（#/tool/x）规范化为干净路径，避免同一内容两种 URL */
+  if (canPush && /^#\/tool\//.test(location.hash || '')) {
+    const sid = parseRoute();
+    if (sid) { try { history.replaceState({}, '', '/tool/' + encodeURIComponent(sid) + '/'); } catch (e) {} }
+  }
   renderCatNav();
   route();
 
-  /* 暴露给卡片点击（data-link 等备用） */
-  document.querySelectorAll('[data-link]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); location.hash = '#/'; }));
+  /* data-link 等标记的链接统一切回首页 */
+  document.querySelectorAll('[data-link]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); nav('/'); }));
 })();

@@ -330,3 +330,23 @@ html[data-theme="light"] .cmp-img-box { background-color: #d7dbe3; background-im
 .cmp-stat .s-after b { color: var(--accent); }
 .cmp-stat .s-arr { color: var(--text-muted); font-size: 16px; }
 .cmp-stat .s-pct { font-size: 15px; margin-left: auto; }
+
+/* ============ 工具页 SEO 区块（面包屑 / 关于 / 同类内链） ============
+   静态页（tool/<id>/index.html）与运行时动态渲染共用同一套 DOM 结构
+   （见 util.js 的 toolViewHTML），所以样式也只有这一份。 */
+.tb-crumb { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13px; color: var(--text-muted); margin: 0 0 14px; }
+.tb-crumb a { color: var(--text-soft); }
+.tb-crumb a:hover { color: var(--accent); }
+.tb-crumb > span { opacity: .5; }
+.tb-h1 { font-size: 15px; font-weight: 600; color: var(--text); margin: 0; display: inline; }
+
+.tb-seo { margin-top: 34px; padding-top: 22px; border-top: 1px solid var(--border-soft); color: var(--text-soft); font-size: 14px; }
+.tb-seo h2 { font-size: 17px; margin: 0 0 10px; color: var(--text); }
+.tb-seo h3 { font-size: 14px; margin: 22px 0 10px; color: var(--text); }
+.tb-seo p { margin: 0 0 10px; line-height: 1.75; }
+.tb-seo .tb-kw { color: var(--text-muted); font-size: 13px; }
+.tb-same { display: flex; flex-wrap: wrap; gap: 8px; }
+.tb-same a { display: inline-block; padding: 5px 11px; border: 1px solid var(--border); border-radius: 999px; background: var(--bg-card); color: var(--text-soft); font-size: 13px; transition: border-color .15s, color .15s; }
+.tb-same a:hover { border-color: var(--accent); color: var(--accent); }
+.tb-seo .tb-home { margin-top: 22px; font-size: 13.5px; }
+.tb-seo .tb-home a { color: var(--accent); }
