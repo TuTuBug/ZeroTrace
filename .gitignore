@@ -1,2 +1,5 @@
 # WorkBuddy 本地项目数据（记忆/日志），不入库
 .workbuddy/
+
+# wrangler 本地构建缓存（跑 wrangler deploy --dry-run / dev 时生成）
+.wrangler/

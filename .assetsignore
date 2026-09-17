@@ -1,0 +1,54 @@
+# ============================================================
+# Cloudflare Workers 静态资源排除清单
+# ------------------------------------------------------------
+# 为什么必须有这个文件：
+#   本项目部署形态是 Workers（构建命令 npx wrangler deploy，
+#   assets.directory = "."，即整个仓库根目录当静态资源）。
+#   Cloudflare Pages 会「自动」排除 .git / node_modules / .DS_Store，
+#   但 **Workers 不会**——不加这个文件，仓库根目录下的所有东西
+#   都会被上传到公网，包括整个 .git 目录。
+#
+#   实测（2026-09-17）未加此文件时线上可直接下载：
+#     /.git/index      200  ← 含全部文件名 + 每个文件的 SHA1 + mtime
+#     /.git/config     200
+#     /.git/HEAD       200
+#     /.git/logs/HEAD  200  ← 本地 git 操作历史
+#     /.git/FETCH_HEAD 200
+#     /.git/description 200
+#   幸运的是 .git/objects 与 *.pack 未被上传，源码历史未泄露，
+#   但这属于「运气」，不是「设计」。
+#
+# 语法与 .gitignore 相同（Cloudflare 官方：takes the same format as .gitignore）。
+# ============================================================
+
+# --- 版本控制目录：绝对不可发布 ---
+.git/
+.gitignore
+
+# --- 本项目内部文件 ---
+.workbuddy/
+.wrangler/
+.assetsignore
+
+# --- 工具与构建脚本：源码在 GitHub 上，无需重复发布到站点 ---
+/scripts/
+
+# --- 部署平台配置 ---
+wrangler.jsonc
+wrangler.toml
+_redirects
+_headers
+
+# --- 依赖与文档 ---
+node_modules/
+.github/
+README.md
+
+# ============================================================
+# 注意：以下内容「必须」继续发布，切勿加入本文件
+#   index.html          首页
+#   assets/**           样式、脚本、og 封面图
+#   vendor/**           二维码 / 条形码本地库
+#   tool/**             155 个工具静态页（SEO 核心资产）
+#   robots.txt          sitemap.xml
+# ============================================================

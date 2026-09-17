@@ -26,10 +26,10 @@
 
 ```
 toolbox/
+├── .assetsignore           # 【必须】Cloudflare Workers 发布排除清单，排除 .git 等（见「八、部署」）
 ├── index.html              # 入口页面（站名/隐私徽章/分类导航/首页/CSP 与 SEO 元信息）
 ├── robots.txt              # 搜索引擎抓取规则
 ├── sitemap.xml             # 站点地图（由 scripts/gen-static.js 生成，勿手改）
-├── _redirects              # Cloudflare Pages 兜底：/tool/* 回退首页，避免漏生成时 404
 ├── scripts/
 │   └── gen-static.js       # 工具页静态化生成器（见「六、SEO：工具页静态化」）
 ├── tool/                   # 【生成物】每个工具一份静态页：tool/<id>/index.html
@@ -201,7 +201,11 @@ T.register({
 - 页面内含**预渲染的工具界面与说明正文**，不是空壳跳转页——禁用 JS 也能读到完整内容
 - 页尾附**同类工具的真实 `<a href>` 内链**，给爬虫一张抓取网（hash 链接爬不到，等于没有内链）
 - 顺带重写 `sitemap.xml`（1 首页 + N 工具页）
-- `_redirects` 让尚未生成的 `/tool/*` 回退到首页，由 `app.js` 按路径渲染，不会 404
+- **不使用 `_redirects` 做兜底**（⚠️ 重要，2026-09-17 踩过的坑）。曾写过 `/tool/* /index.html 200` 想「静态页缺失时回退首页」，这是**错的**，两层原因：
+  1. Cloudflare 官方明确：*Redirects are always followed, regardless of whether or not an asset matches the incoming request* —— 200 重写规则**无条件生效**，不会因为 `tool/<id>/index.html` 真实存在就跳过。所以它根本不是「兜底」，而是「全覆盖」。
+  2. 实际操作中它连构建都过不去：目标 `/index.html` 会被 Cloudflare 的 HTML 规范化 strip 成 `/index`、`/`，从而再次触发同一条规则，构建期直接报 `code 100324 Infinite loop detected` → **整个部署失败**。即便绕开该检测，155 个静态页也会全部返回首页内容，变成重复内容，SEO 反而被惩罚 —— 正好毁掉本节存在的意义。
+
+  取代方案：让「漏生成」不可能发生 —— 把生成脚本挂进部署流程（见「八、部署」）。
 
 运行侧配套：`app.js` 路由改为**路径优先 + hash 兜底**
 
@@ -228,3 +232,69 @@ SITE=http://127.0.0.1:8290/ node .workbuddy/verify-static.js
 3. **新增 `tools-*.js` 时**，确认已在 `index.html` 底部按序补上 `<script>`——漏加会让该分类全部工具静默消失，且控制台不报错。
 4. **调整 CSP 后**，到浏览器控制台确认没有 `Refused to ...` 报错，并回归验证三处：科学计算器（依赖 `new Function`）、图片类工具（依赖 `blob:` 预览与下载）、二维码（内联 SVG DOM）。
 5. **新增任何站外资源前请三思**：`connect-src 'none'`、`img-src` 白名单是本站的核心承诺，刻意不放行站外请求。
+6. **改动部署相关文件（`.assetsignore`、`scripts/`）后**，先跑 `node scripts/verify-assetsignore.js` 预演发布清单，再推送 —— 别再让 `.git` 之类的文件上线（见「八、部署」）。
+
+---
+
+## 八、部署（Cloudflare Workers）
+
+### 链路
+
+`git push` → Cloudflare 自动构建 → 上线。**不需要手动上传任何文件**。
+
+- 项目形态是 **Workers**（不是 Pages）：构建命令 `npx wrangler deploy`，`assets.directory = "."`，即**整个仓库根目录都当静态资源目录**
+- 构建通常 1–2 分钟。push 后立刻访问新文件若返回 404 属正常，稍等再看
+- 构建日志里的 `Read N files from the assets directory` 是**过滤前的读取数**，不等于实际上传数，别被这个数字吓到
+
+### ⚠️ `.assetsignore` 是必需的，不是可选的
+
+Cloudflare **Pages 会自动排除** `.git`、`node_modules`、`.DS_Store` 等；**Workers 不会**。wrangler 源码里默认只排除三个 metafile：
+
+```
+/.assetsignore   /_redirects   /_headers
+```
+
+其余一律照发。本项目正是栽在这个差异上 —— 线上曾可直接下载：
+
+```
+https://tool.dmi.ccwu.cc/.git/index      → 200（含全部文件名 + 每个文件 SHA1 + mtime）
+https://tool.dmi.ccwu.cc/.git/config     → 200
+https://tool.dmi.ccwu.cc/.git/HEAD       → 200
+https://tool.dmi.ccwu.cc/.git/logs/HEAD  → 200
+https://tool.dmi.ccwu.cc/.git/FETCH_HEAD → 200
+```
+
+（当时 `.git/objects/**` 与 `*.pack` 恰好未被上传，源码历史没泄露 —— 但那是运气，不是设计。）
+
+根目录的 `.assetsignore`（语法同 `.gitignore`）已排除 `.git/`、`.workbuddy/`、`.wrangler/`、`scripts/`、`README.md`、`.gitignore`、`wrangler.*`、`_redirects`、`_headers`。
+
+**推送前预演发布清单**：
+
+```bash
+node scripts/verify-assetsignore.js
+```
+
+输出「实际会发布 177 个文件」（155 工具页 + 17 assets + 3 根文件 + 2 vendor）+ 25 项断言：必须发布的没被误伤、必须排除的确实挡住、`.git` 残留必须为 0、工具页数量与 `tool/` 目录数一致。断言失败时退出码为 1，可直接用于 CI。
+
+> 脚本用 `ignore` 库（wrangler 内部用的就是同一个 gitignore 实现）复现过滤逻辑；找不到时会提示 `npm install ignore@5.3.1`。它只在本地校验，不参与构建、也不会被发布（`scripts/` 已在 `.assetsignore` 中排除）。
+
+### 建议：把静态页生成挂进构建命令
+
+目前 `tool/` 与 `sitemap.xml` 是本地生成、随代码提交进仓库的，靠人记得跑脚本。把 Cloudflare 控制台的构建命令从
+
+```
+npx wrangler deploy
+```
+
+改为
+
+```
+node scripts/gen-static.js && npx wrangler deploy
+```
+
+就从「靠纪律」变成「不可能忘」。该脚本每次运行会先清空 `tool/` 再按注册表全量重建，并带自检（缺 h1、缺内链、相对路径资源都会报错并置退出码非 0），可安全自动化。
+
+### 为什么本项目不用 `_redirects`
+
+详见「六、SEO：工具页静态化」—— 它做不到「缺页才兜底」，实际语义是无条件覆盖全部请求，既会让构建直接失败，也会毁掉全部静态页的 SEO 价值。**不要为了兜底再加回来。**
+

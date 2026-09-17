@@ -8,10 +8,25 @@
      收录不了（提交 155 条 hash URL 还会被判「首页重复提交」）。
      这里在构建期为每个工具预渲染一份真实静态页：
        路径 /tool/<id>/ + 独立 title/description + 可见正文 + 同类内链
-     配合 app.js 的「路径优先」路由和 _redirects 兜底，做到一份内容
-     两个入口：
+     配合 app.js 的「路径优先」路由，做到一份内容两个入口：
        - 爬虫：拿到完整 HTML（含工具界面与说明文字）
        - 用户：JS 接管后功能完全不变（不重复渲染，只补事件）
+
+   ⚠️ 不要用 _redirects 做「缺页兜底」（2026-09-17 踩过的坑）：
+     Cloudflare 官方文档明确写着 "Redirects are always followed,
+     regardless of whether or not an asset matches the incoming request."
+     ——即 _redirects 里的 200 重写规则是「无条件生效」的，不会因为
+     tool/<id>/index.html 真实存在就跳过。写 /tool/* /index.html 200
+     的后果有两层：
+       ① 构建期直接报错 code 100324「Infinite loop detected」，
+          因为目标 /index.html 会被 HTML 规范化 strip 成 /index、/，
+          从而再次触发该规则 → 整个部署失败；
+       ② 就算绕过检测写得能过，155 个静态页也会全部被重写成首页内容，
+          变成重复内容，SEO 反而被惩罚——正好毁掉本脚本存在的意义。
+     兜底的正确做法是「让它不可能发生」：把本脚本挂进部署流程
+     （构建命令改为 `node scripts/gen-static.js && npx wrangler deploy`），
+     每次部署全量重生成，就不会再出现「新增工具忘了跑脚本」。
+     本脚本每次运行都会先删空 tool/ 再全量重建，且带自检，可放心自动化。
 
    用法：
      node scripts/gen-static.js
