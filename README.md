@@ -233,6 +233,7 @@ SITE=http://127.0.0.1:8290/ node .workbuddy/verify-static.js
 4. **调整 CSP 后**，到浏览器控制台确认没有 `Refused to ...` 报错，并回归验证三处：科学计算器（依赖 `new Function`）、图片类工具（依赖 `blob:` 预览与下载）、二维码（内联 SVG DOM）。
 5. **新增任何站外资源前请三思**：`connect-src 'none'`、`img-src` 白名单是本站的核心承诺，刻意不放行站外请求。
 6. **改动部署相关文件（`.assetsignore`、`scripts/`）后**，先跑 `node scripts/verify-assetsignore.js` 预演发布清单，再推送 —— 别再让 `.git` 之类的文件上线（见「八、部署」）。
+7. **推送并等构建完成后**，跑 `SITE=https://tool.dmi.ccwu.cc/ node scripts/verify-online.js` 复验线上（见「八、部署 › 上线后复验」）。这一步能同时抓出「静态页没生成」「敏感文件又漏出去」「CSP 把某个工具打挂」三类问题。
 
 ---
 
@@ -297,4 +298,30 @@ node scripts/gen-static.js && npx wrangler deploy
 ### 为什么本项目不用 `_redirects`
 
 详见「六、SEO：工具页静态化」—— 它做不到「缺页才兜底」，实际语义是无条件覆盖全部请求，既会让构建直接失败，也会毁掉全部静态页的 SEO 价值。**不要为了兜底再加回来。**
+
+### 上线后复验
+
+**推送后的本地预演只能证明「会发什么」，证明不了「发出去之后是不是好的」。** 每次上线后跑一次线上端到端（真实 Chrome，22 项断言）：
+
+```bash
+SITE=https://tool.dmi.ccwu.cc/ node scripts/verify-online.js   # 验线上
+node scripts/verify-online.js                                  # 不传 SITE 则验本地 127.0.0.1:8290
+SHOT=1 SITE=... node scripts/verify-online.js                  # 额外存一张首页截图
+```
+
+分三层：
+
+| 层 | 检查内容 |
+|---|---|
+| A. HTTP | 首页资源齐全；`/tool/<id>/` 是**独立页面**（有自己的 canonical、不是首页副本）；13 条敏感路径（`.git/*`、`wrangler.*`、`scripts/*`、`README.md`、`_redirects`）必须 404 |
+| B. 隐私 | 本站零外部网络请求；无 CSP 违规；控制台无 error、无未捕获异常 |
+| C. 功能 | 工具总数已渲染；搜索防抖生效；`picsum` 零残留；科学计算器（`new Function`）、二维码（内联 SVG）实测可用；从静态页直达时 JS 能正常接管 |
+
+任一项失败退出码为 1，可直接接 CI。依赖 `playwright-core`（装在隔离 workspace，驱动本机已装 Chrome，**不下载 Chromium**）：
+
+```bash
+cd ~/.workbuddy/binaries/node/workspace && npm install playwright-core
+```
+
+> **关于 `cloudflareinsights.com` 信标**：线上会看到 Cloudflare 边缘自动注入的 Web Analytics 脚本（不在本仓库内），被本站 CSP 拦下。脚本把它单独归类为 `INFO` 而非失败项 —— 它属于平台行为，不是代码问题。彻底消除需在 Cloudflare 控制台关闭该域名的 Web Analytics 自动注入；**不要**为它放行 CSP，那等于主动放行追踪，与产品定位冲突。
 
