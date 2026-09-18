@@ -146,6 +146,19 @@ async function watchThemeFlips(page) {
     };
   });
 
+  /* 等「静态工具页 → 首页」这次**跨文档**导航真正落定。
+     ⚠️ 别用固定 sleep：本地 http.server 是毫秒级，线上要等 19 个脚本回来，
+     同一个 1200ms 在本地稳过、在线上偶发失败（2026-09-18 就是这么被骗过一次，
+     差点以为产品有 bug）。先等 URL 变成根路径，再等首页真的渲染完。 */
+  const waitHome = async () => {
+    await page.waitForURL(u => new URL(u).pathname === '/', { timeout: 15000 }).catch(() => {});
+    await page.waitForFunction(() => {
+      const n = document.querySelector('#hero-count');
+      return !!n && n.textContent !== '…'
+        && document.querySelectorAll('#home-view .tool-card').length > 100;
+    }, null, { timeout: 15000 }).catch(() => {});
+  };
+
   // ②-1 从首页进工具再返回（SPA 路径）
   await page.goto(SITE + '/', { waitUntil: 'networkidle' });
   await page.waitForTimeout(300);
@@ -162,7 +175,7 @@ async function watchThemeFlips(page) {
   await page.goto(SITE + '/tool/base64/', { waitUntil: 'networkidle' });
   await page.waitForTimeout(400);
   await page.click('#tb-back');
-  await page.waitForTimeout(1200);
+  await waitHome();
   h = await homeShell();
   check('静态工具页→返回：首页外壳与卡片齐全',
     h.header && h.hero && h.search && h.catNav && h.footer && h.cards > 100,
@@ -173,7 +186,7 @@ async function watchThemeFlips(page) {
   await page.goto(SITE + '/tool/json/', { waitUntil: 'networkidle' });
   await page.waitForTimeout(400);
   await page.click('.tb-crumb a');
-  await page.waitForTimeout(1200);
+  await waitHome();
   h = await homeShell();
   check('面包屑「首页」链接：首页完整',
     h.header && h.hero && h.search && h.footer && h.cards > 100,
@@ -183,7 +196,7 @@ async function watchThemeFlips(page) {
   await page.goto(SITE + '/tool/json/', { waitUntil: 'networkidle' });
   await page.waitForTimeout(400);
   await page.click('.tb-home a');
-  await page.waitForTimeout(1200);
+  await waitHome();
   h = await homeShell();
   check('页尾「返回首页」链接：首页完整',
     h.header && h.search && h.footer && h.cards > 100,
@@ -196,7 +209,7 @@ async function watchThemeFlips(page) {
   await page.waitForTimeout(500);
   const midTool = await page.locator('#tb-root').getAttribute('data-tool-id');
   await page.click('#tb-back');
-  await page.waitForTimeout(1200);
+  await waitHome();
   h = await homeShell();
   check('工具→同类工具→返回：首页完整',
     h.header && h.hero && h.search && h.catNav && h.footer && h.cards > 100,
