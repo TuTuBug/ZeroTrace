@@ -90,15 +90,23 @@
     });
   }
 
-  /* 工具卡片（右上角 ☆ 加入/移出常用） */
+  /* 工具卡片（右上角 ☆ 加入/移出常用）
+     用**真 <a href>** 而不是 div + onclick，换来三件原来没有的事：
+       ① 中键 / Ctrl+点击新开标签，右键可「复制链接地址」
+       ② 首页多出 155 条指向工具页的真实内链（原来首页对内一个 <a> 都没有）
+       ③ 天然可 Tab 聚焦、回车打开（div 完全进不了键盘导航）
+     普通左键由下面的 document 级 click 委派接管走 SPA，体感仍是瞬开、不重载。
+     星标用 <span role="button"> 而不是 <button>：<a> 里不该再套交互元素。
+     代价是键盘收藏要自己补一下（见 attachCardHandlers），换到的是卡片本身可聚焦。 */
   function card(t) {
     const fav = isFav(t.id);
-    return `<div class="tool-card" data-id="${t.id}">
-      <button class="t-fav ${fav ? 'on' : ''}" data-fav="${t.id}" title="${fav ? '从常用移除' : '加入常用'}" aria-label="收藏">${fav ? '★' : '☆'}</button>
+    const path = '/tool/' + encodeURIComponent(t.id) + '/';
+    return `<a class="tool-card" href="${path}" data-id="${t.id}">
+      <span class="t-fav ${fav ? 'on' : ''}" role="button" tabindex="0" data-fav="${t.id}" title="${fav ? '从常用移除' : '加入常用'}" aria-label="收藏">${fav ? '★' : '☆'}</span>
       <div class="t-ico">${t.icon}</div>
       <div class="t-name">${esc(t.name)}</div>
       <div class="t-desc">${esc(t.desc)}</div>
-    </div>`;
+    </a>`;
   }
 
   function sectionHTML(ico, name, items, count, isFav) {
@@ -110,12 +118,16 @@
     return `<section class="cat-section fav-section"><div class="cat-head"><span class="cat-ico">⭐</span><h2>我的常用</h2></div>
       <div class="empty"><div class="big">☆</div><p>还没有常用工具</p><p class="muted">在任意工具卡片右上角点 ☆ 即可加入</p></div></section>`;
   }
+  /* 卡片自己的跳转不用在这里绑 —— 它们是真 <a href="/tool/x/">，由下面那个
+     click 委派统一接管（与工具页底部的同类工具链接走同一条路）。
+     这里只管星标。星标必须 preventDefault：它在 <a> 内部，光 stopPropagation
+     拦不住链接的默认跳转，点了收藏会顺带把工具打开。 */
   function attachCardHandlers() {
-    homeView.querySelectorAll('[data-id]').forEach(el => el.onclick = (e) => {
-      if (e.target.closest('[data-fav]')) return; // 点的是收藏星标，不打开工具
-      nav('/tool/' + encodeURIComponent(el.dataset.id) + '/');
+    homeView.querySelectorAll('[data-fav]').forEach(el => {
+      const act = (e) => { e.preventDefault(); e.stopPropagation(); toggleFav(el.dataset.fav); };
+      el.onclick = act;
+      el.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') act(e); };
     });
-    homeView.querySelectorAll('[data-fav]').forEach(el => el.onclick = (e) => { e.stopPropagation(); toggleFav(el.dataset.fav); });
   }
 
   function filtered() {
@@ -204,12 +216,24 @@
 
   /* 路由解析：干净路径 /tool/<id>/ 优先，其次兼容老的 #/tool/<id> */
   function parseRoute() {
+    const h = (location.hash || '#/').replace(/\/+$/, '');
+    const hm = h.match(/^#\/tool\/([^/]+)$/);
+    /* ⚠️ file:// 下 hash 必须**优先**于 pathname：静态工具页的 pathname 永远是
+       自己那份（…/toolbox/tool/json/index.html），一旦让 pathname 先匹配，站内
+       跳到别的工具后路由还会解析回 json —— 表现就是「点了没反应」。
+       而 file 协议下 pushState 不可用，站内跳转全靠 hash，它才是最新的意图。 */
+    if (location.protocol === 'file:' && hm) return decodeURIComponent(hm[1]);
+
     const p = (location.pathname || '/').replace(/\/+$/, '') || '/';
     let m = p.match(/^\/tool\/([^/]+)$/);
     if (m) return decodeURIComponent(m[1]);
-    const h = (location.hash || '#/').replace(/\/+$/, '');
-    m = h.match(/^#\/tool\/([^/]+)$/);
-    if (m) return decodeURIComponent(m[1]);
+    /* file:// 的 pathname 是真实文件路径，不识别的话双击打开静态工具页会被
+       渲染成首页 —— 工具反而没了 */
+    if (location.protocol === 'file:') {
+      m = p.match(/\/tool\/([^/]+)\/index\.html$/);
+      if (m) return decodeURIComponent(m[1]);
+    }
+    if (hm) return decodeURIComponent(hm[1]);
     return null;
   }
 
@@ -223,21 +247,31 @@
      index.html 有；tool/<id>/index.html 这份静态页**没有**（见 gen-static.js
      的模板：只有 <main> + #tool-view + #toast）。 */
   const HAS_SHELL = !!document.querySelector('.site-header');
-  const IS_HTTP = /^https?:$/.test(location.protocol);
+
+  /* 从「当前这份（缺外壳的）文档」推出首页地址；推不出来返回 null ——
+     宁可少块壳，也绝不 assign 到当前地址把自己转成死循环。
+       http：/tool/<id>/                    → /（顺带支持子路径部署：/sub/tool/<id>/ → /sub/）
+       file：…/toolbox/tool/<id>/index.html → …/toolbox/index.html */
+  function homeURL() {
+    const p = location.pathname;
+    if (/^https?:$/.test(location.protocol)) {
+      return /\/tool\/[^/]+\/?$/.test(p) ? p.replace(/\/tool\/[^/]+\/?$/, '/') : '/';
+    }
+    if (location.protocol === 'file:') {
+      return /\/tool\/[^/]+\/index\.html$/.test(p)
+        ? p.replace(/\/tool\/[^/]+\/index\.html$/, '/index.html') : null;
+    }
+    return null;
+  }
 
   function nav(path) {
     /* 静态工具页 → 首页必须是**真导航**：这种文档里没有 site-header / hero /
        footer，若走 SPA 只把卡片塞进 #home-view，用户看到的就是一个没有页头、
        没有搜索框、没有分类导航、没有页脚的残缺首页（2026-09-18 反馈的原话
        「返回到首页，首页展示的不全」）。让浏览器去取完整的 index.html。 */
-    if (!HAS_SHELL && IS_HTTP && path === '/') {
-      /* 从 /tool/<id>/ 反推首页，顺带支持部署在子路径下（/sub/tool/<id>/ → /sub/）。
-         反推不出来就老实用 '/'，绝不 assign 到当前地址把自己转成死循环。 */
-      const home = /\/tool\/[^/]+\/?$/.test(location.pathname)
-        ? location.pathname.replace(/\/tool\/[^/]+\/?$/, '/') : '/';
-      showLoading('正在返回首页…');
-      location.assign(home);
-      return;
+    if (!HAS_SHELL && path === '/') {
+      const home = homeURL();
+      if (home) { showLoading('正在返回首页…'); location.assign(home); return; }
     }
     if (canPush) {
       try { history.pushState({}, '', path); route(); return; }
@@ -260,10 +294,21 @@
     if (!raw || raw.charAt(0) === '#') return;
     let url;
     try { url = new URL(raw, location.href); } catch (err) { return; }
-    if (url.origin !== location.origin) return;                       // GitHub 等外链照常
-    if (url.pathname !== '/' && !/^\/tool\/[^/]+\/$/.test(url.pathname)) return; // 只接管首页与工具页
+    /* 同源判断不能直接比 origin：file:// 下 Chrome 的 location.origin 是字符串
+       "file://"，而 new URL('file:///…').origin 是 "null"，两者永不相等 —— 结果
+       是双击打开时每一条站内链接都被当成外链放行，点一下就 404。file 协议下
+       只认「同为 file 协议」，后面的 pathname 白名单照旧把关。 */
+    const sameSite = url.protocol === location.protocol
+      && (location.protocol === 'file:' || url.host === location.host);
+    if (!sameSite) return;                                            // GitHub 等外链照常
+    /* file:// 下站点绝对路径会被 Chrome 补上盘符：href="/tool/x/" →
+       file:///D:/tool/x/，pathname 变成 /D:/tool/x/。先剥掉开头的 /<盘符>，
+       否则白名单永远匹配不上，每条站内链接都被放行成真导航 → 404。 */
+    let p = url.pathname;
+    if (url.protocol === 'file:') p = p.replace(/^\/[A-Za-z]:/, '');
+    if (p !== '/' && !/^\/tool\/[^/]+\/$/.test(p)) return;            // 只接管首页与工具页
     e.preventDefault();
-    nav(url.pathname + url.search);
+    nav(p + url.search);
   });
 
   function route() {

@@ -128,6 +128,9 @@ a { color: inherit; text-decoration: none; }
   display: flex; flex-direction: column; gap: 8px; min-height: 96px;
 }
 .tool-card:hover { transform: translateY(-3px); border-color: var(--accent); box-shadow: var(--shadow); }
+/* 卡片是**真 <a>**，键盘 Tab 能聚焦 —— 必须给可见焦点环，否则键盘用户不知道焦点在哪。
+   用 :focus-visible：只在键盘操作时出现，鼠标点一下不会留下难看的框。 */
+.tool-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .tool-card .t-ico { font-size: 24px; }
 .tool-card .t-name { font-weight: 700; font-size: 15px; }
 .tool-card .t-desc { color: var(--text-muted); font-size: 12.5px; line-height: 1.45; }

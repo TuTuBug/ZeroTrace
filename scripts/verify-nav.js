@@ -12,7 +12,10 @@
         在这类页面上点「返回」走 SPA 渲染，#home-view 确实填满了工具
         卡片，但头部、搜索框、分类导航、页脚全都不存在 → 「首页展示不全」。
 
-   本脚本就盯这两件事，外加「导航不许整页重载」这个根治项。
+   本脚本就盯这两件事，外加三条容易被改回去的约定：
+     - 导航不许整页重载（否则又会闪主题）
+     - 页内资源必须是相对路径（file:// 双击打开靠它）
+     - 首页卡片是真 <a href>（中键/Ctrl+点击要能新开标签）
 
    用法：
      node scripts/verify-nav.js                 # 默认 127.0.0.1:8290
@@ -24,6 +27,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { pathToFileURL } = require('url');
 
 const PW = 'C:/Users/xjn59/.workbuddy/binaries/node/workspace/node_modules/playwright-core';
 const { chromium } = require(PW);
@@ -236,9 +240,7 @@ async function watchThemeFlips(page) {
   });
   check('页脚外链保留原样（新标签打开）', extOk);
 
-  // 修饰键 + 中键必须放行给浏览器（新标签）。
-  // 注意用真链接（.tb-same a）来验：首页卡片是 <div>，它压根不在「链接拦截」
-  // 这条链路上（走的是卡片自己的 onclick），拿它验修饰键只会得出错误结论。
+  // 修饰键 + 中键必须放行给浏览器（新标签）。用真链接（.tb-same a）来验最直接。
   const newTabs = [];
   ctx.on('page', p => newTabs.push(p));
   await page.goto(SITE + '/tool/json/', { waitUntil: 'networkidle' });
@@ -249,6 +251,103 @@ async function watchThemeFlips(page) {
   check('Ctrl+点击同类工具链接由浏览器新开标签', newTabs.length === 1, '新标签数 = ' + newTabs.length);
   check('Ctrl+点击后当前页未跳走', new URL(page.url()).pathname === linkPath,
     linkPath + ' -> ' + new URL(page.url()).pathname);
+
+  // 首页卡片现在也是真 <a href>（原来是 <div> + onclick：中键/Ctrl+点击新开标签、
+  // 右键「复制链接地址」全都不可用，也给不了爬虫内链）。这两条要盯住别退回 div。
+  const tabs2 = [];
+  ctx.on('page', p => tabs2.push(p));
+  await page.goto(SITE + '/', { waitUntil: 'networkidle' });
+  await page.waitForTimeout(400);
+  const cardHref = await page.locator('.tool-card >> nth=0').getAttribute('href');
+  check('首页卡片是真链接（href 形如 /tool/<id>/）',
+    /^\/tool\/[^/]+\/$/.test(cardHref || ''), String(cardHref));
+  await page.click('.tool-card >> nth=0', { modifiers: ['Control'] });
+  await page.waitForTimeout(700);
+  check('Ctrl+点击卡片由浏览器新开标签', tabs2.length >= 1, '新标签数 = ' + tabs2.length);
+  check('Ctrl+点击卡片后当前页仍停在首页', new URL(page.url()).pathname === '/',
+    new URL(page.url()).pathname);
+
+  // 星标在 <a> 内部，必须 preventDefault：光 stopPropagation 拦不住链接默认跳转，
+  // 点了收藏会顺带把工具打开。这条是上面那个结构改动最容易翻车的地方。
+  await page.locator('.tool-card [data-fav]').first().click();
+  await page.waitForTimeout(400);
+  check('点星标只收藏、不打开工具',
+    new URL(page.url()).pathname === '/' && (await page.locator('#home-view .tool-card').count()) > 100,
+    new URL(page.url()).pathname);
+
+  console.log('\n=========== ④ 双击 index.html（file://）必须照样能用 ===========');
+  /* 由来：页内资源原来全是绝对路径（/assets/…），file:// 下会被解析到文件系统根，
+     实测全部 ERR_FILE_NOT_FOUND —— 首页卡片 0 个、CSS 完全不生效。于是
+     「下载下来离线自用」这条路整个断掉，而它正是「零上传」最硬的卖点。
+     改成相对路径后，这里盯死四条：资源能加载 / 静态工具页认得自己是谁 /
+     站内跳转不重载 / 返回拿到的是**完整**首页而不是那个残缺版。 */
+  const FILE_HOME = pathToFileURL(path.join(ROOT, 'index.html')).href;
+  const FILE_TOOL = pathToFileURL(path.join(ROOT, 'tool', 'json', 'index.html')).href;
+
+  const fPage = await ctx.newPage();
+  const fErr = [];
+  fPage.on('pageerror', e => fErr.push('[js] ' + String(e).slice(0, 120)));
+  fPage.on('requestfailed', r => fErr.push('[fail] ' + r.url().split('/').slice(-2).join('/')));
+  let fLoads = 0;
+  fPage.on('load', () => fLoads++);
+
+  const shellState = () => fPage.evaluate(() => {
+    const vis = el => !!el && getComputedStyle(el).display !== 'none';
+    const root = document.querySelector('#tb-root');
+    return {
+      file: location.pathname.split('/').pop(),
+      cards: document.querySelectorAll('#home-view .tool-card').length,
+      header: !!document.querySelector('.site-header'),
+      search: vis(document.querySelector('#search')),
+      footer: !!document.querySelector('.site-footer'),
+      toolId: root ? root.dataset.toolId : null,
+      toolVisible: vis(document.querySelector('#tool-view')),
+      homeVisible: vis(document.querySelector('#home-view')),
+      bg: getComputedStyle(document.body).backgroundColor,
+    };
+  });
+
+  await fPage.goto(FILE_HOME, { waitUntil: 'load' });
+  await fPage.waitForTimeout(700);
+  let f = await shellState();
+  check('file:// 首页：卡片渲染出来（说明资源全部加载成功）', f.cards > 100, '卡片=' + f.cards);
+  check('file:// 首页：样式表生效且按偏好主题应用', f.bg === LIGHT_BG, f.bg);
+
+  const fl1 = fLoads;
+  await fPage.click('.tool-card >> nth=0');
+  await fPage.waitForTimeout(600);
+  f = await shellState();
+  check('file:// 点卡片能打开工具（pushState 不可用 → hash 兜底，仍是 SPA）',
+    !!f.toolId && fLoads - fl1 === 0, 'tool=' + f.toolId + ' 文档load=' + (fLoads - fl1));
+  await fPage.click('#tb-back');
+  await fPage.waitForTimeout(600);
+  f = await shellState();
+  check('file:// 从工具返回：首页外壳与卡片齐全',
+    f.header && f.search && f.footer && f.cards > 100,
+    `header=${f.header} search=${f.search} footer=${f.footer} 卡片=${f.cards}`);
+
+  await fPage.goto(FILE_TOOL, { waitUntil: 'load' });
+  await fPage.waitForTimeout(700);
+  f = await shellState();
+  check('file:// 直接打开静态工具页：认得出是哪个工具、显示工具而不是首页',
+    f.toolId === 'json' && f.toolVisible && !f.homeVisible,
+    `toolId=${f.toolId} 工具视图=${f.toolVisible} 首页视图=${f.homeVisible}`);
+
+  const fl2 = fLoads;
+  await fPage.click('.tb-same a >> nth=0');
+  await fPage.waitForTimeout(600);
+  f = await shellState();
+  check('file:// 点同类工具链接：不整页重载、工具已切换',
+    fLoads - fl2 === 0 && !!f.toolId && f.toolId !== 'json',
+    'tool=' + f.toolId + ' 文档load=' + (fLoads - fl2));
+
+  await fPage.click('#tb-back');
+  await fPage.waitForTimeout(900);
+  f = await shellState();
+  check('file:// 静态工具页→返回：真导航回 index.html 且首页完整（不是残缺首页）',
+    f.file === 'index.html' && f.header && f.search && f.footer && f.cards > 100,
+    `落点=${f.file} header=${f.header} search=${f.search} 卡片=${f.cards}`);
+  check('file:// 下无资源加载失败 / 无 JS 异常', fErr.length === 0, fErr.slice(0, 4).join(' | '));
 
   check('无未捕获 JS 异常', pageErrors.length === 0, pageErrors.join(' | '));
 

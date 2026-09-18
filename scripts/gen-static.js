@@ -56,14 +56,22 @@ const VER = pick(/\?v=([\w.\-]+)/, '资源版本号 ?v=');
 const CSP = pick(/<meta http-equiv="Content-Security-Policy" content="([^"]*)"/, 'CSP');
 const FAVICON = pick(/<link rel="icon" href="([^"]*)"/, 'favicon');
 const THEME = pick(/<meta name="theme-color" content="([^"]*)"/, 'theme-color');
+/* 静态页在 /tool/<id>/，比根目录深一级 → 页内资源要退两级。
+   index.html 里写的是根目录下的相对路径（assets/…），在这里统一加前缀，
+   于是「首页改了资源列表，静态页自动跟随」这条仍然成立。
+   ⚠️ 别改回绝对路径 /assets/…：file:// 下会解析到文件系统根，双击打开整站崩。 */
+const REL = '../../';
+const localize = (tag) => tag.replace(/\s(src|href)="(?!https?:|data:|\/\/)/, (m, a) => ' ' + a + '="' + REL);
+
 /* 首屏主题引导脚本：必须和 index.html 一样出现在 <head> 里、且在样式表之前，
    否则静态页重载时会先闪一下默认深色。它不能混在下面的 body 脚本列表里，
    那样会被挪到 </body> 前执行 —— 时机就没了。 */
-const BOOT = (indexHTML.match(/<script src="[^"]*theme-boot\.js[^"]*"><\/script>/) || [])[0];
-if (!BOOT) throw new Error('未能在 index.html 中找到 theme-boot.js（首屏主题引导，缺失会导致整页重载时闪主题）');
+const BOOT_RAW = (indexHTML.match(/<script src="[^"]*theme-boot\.js[^"]*"><\/script>/) || [])[0];
+if (!BOOT_RAW) throw new Error('未能在 index.html 中找到 theme-boot.js（首屏主题引导，缺失会导致整页重载时闪主题）');
+const BOOT = localize(BOOT_RAW);
 const SCRIPTS = (indexHTML.match(/<script src="[^"]+"><\/script>/g) || [])
   .filter(s => !/theme-boot\.js/.test(s))
-  .map(s => '  ' + s).join('\n');
+  .map(s => '  ' + localize(s)).join('\n');
 if (!SCRIPTS) throw new Error('未能在 index.html 中找到任何 <script src>');
 
 /* ---------- 2. 加载工具注册表（与 .workbuddy/audit.js 同款做法） ---------- */
@@ -128,7 +136,7 @@ function pageHTML(t) {
   <meta name="theme-color" content="${THEME}" />
   <link rel="icon" href="${FAVICON}" />
   ${BOOT}
-  <link rel="stylesheet" href="/assets/css/style.css?v=${VER}" />
+  <link rel="stylesheet" href="${REL}assets/css/style.css?v=${VER}" />
 </head>
 <body class="tool-open">
   <main class="wrap main-area">
@@ -179,7 +187,16 @@ for (const t of T.tools) {
   if (!s.includes(attr(t.name))) bad.push(t.id + ' 缺工具名');
   if (!/<h1/.test(s)) bad.push(t.id + ' 缺 h1');
   if (!s.includes('href="/tool/') && T.tools.length > 1) bad.push(t.id + ' 缺同类内链');
-  if (/src="(?!\/|https?:|data:)/.test(s)) bad.push(t.id + ' 含相对路径资源');
+  /* 页内资源必须是「相对路径 + 正好退两级」：
+     写成 /assets/… 绝对路径 → file:// 双击打开时解析到文件系统根，整站打不开；
+     少写一个 ../（或写多）→ 线上 404。两种都是静默故障，必须静态断言。
+     只查 <script>/<link> 上的 src/href —— 站内 <a href="/tool/x/"> 刻意保持绝对
+     （爬虫只看绝对路径），由下一条「缺同类内链」覆盖。 */
+  const resBad = (s.match(/<(?:script|link)\b[^>]*>/g) || []).filter(tag => {
+    const m = tag.match(/(?:src|href)="([^"]*)"/);
+    return m && !/^(https?:|data:|\/\/|\.\.\/\.\.\/)/.test(m[1]);
+  });
+  if (resBad.length) bad.push(t.id + ' 资源路径层级不对（应为 ../../ 前缀）：' + resBad.slice(0, 2).join(' '));
   /* 主题引导必须在样式表之前：放到后面等于没放（照样先按默认深色画一帧） */
   const iBoot = s.indexOf('theme-boot.js');
   const iCss = s.indexOf('style.css');

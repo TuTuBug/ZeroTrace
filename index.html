@@ -25,9 +25,14 @@
   <meta name="twitter:description" content="上百个隐私工具全部在浏览器本地运行——0 服务器、0 后台上传，你的数据从不出本机。" />
   <meta name="twitter:image" content="https://tool.dmi.ccwu.cc/assets/og-cover.png" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛡️</text></svg>" />
+  <!-- ⚠️ 本站所有页内资源一律用**相对路径**（assets/… vendor/…），别改回 /assets/…：
+       绝对路径在 file:// 下会被解析到文件系统根，双击 index.html 就整个打不开
+       （零外部请求 + 可离线下载自用是产品核心承诺，这条路必须留着）。
+       本页在根目录用 assets/…，静态工具页在 /tool/<id>/ 一级，用 ../../assets/…
+       由 scripts/gen-static.js 自动加前缀，并带自检，改错会直接报错。 -->
   <!-- 首屏主题引导：必须在样式表之前同步执行，否则整页重载时会先闪一下默认深色（详见 theme-boot.js 注释） -->
-  <script src="/assets/js/theme-boot.js?v=20260918"></script>
-  <link rel="stylesheet" href="/assets/css/style.css?v=20260918" />
+  <script src="assets/js/theme-boot.js?v=20260918b"></script>
+  <link rel="stylesheet" href="assets/css/style.css?v=20260918b" />
 </head>
 <body>
   <header class="site-header">
@@ -80,22 +85,22 @@
 
   <div id="toast" class="toast" hidden></div>
 
-  <script src="/vendor/qrcode.js?v=20260918"></script>
-  <script src="/vendor/JsBarcode.all.min.js?v=20260918"></script>
-  <script src="/assets/js/util.js?v=20260918"></script>
-  <script src="/assets/js/tools-text.js?v=20260918"></script>
-  <script src="/assets/js/tools-dev.js?v=20260918"></script>
-  <script src="/assets/js/tools-color.js?v=20260918"></script>
-  <script src="/assets/js/tools-css.js?v=20260918"></script>
-  <script src="/assets/js/tools-calc.js?v=20260918"></script>
-  <script src="/assets/js/tools-calc2.js?v=20260918"></script>
-  <script src="/assets/js/tools-text2.js?v=20260918"></script>
-  <script src="/assets/js/tools-gen.js?v=20260918"></script>
-  <script src="/assets/js/tools-color2.js?v=20260918"></script>
-  <script src="/assets/js/tools-math.js?v=20260918"></script>
-  <script src="/assets/js/tools-pass.js?v=20260918"></script>
-  <script src="/assets/js/tools-media.js?v=20260918"></script>
-  <script src="/assets/js/tools-util.js?v=20260918"></script>
-  <script src="/assets/js/app.js?v=20260918"></script>
+  <script src="vendor/qrcode.js?v=20260918b"></script>
+  <script src="vendor/JsBarcode.all.min.js?v=20260918b"></script>
+  <script src="assets/js/util.js?v=20260918b"></script>
+  <script src="assets/js/tools-text.js?v=20260918b"></script>
+  <script src="assets/js/tools-dev.js?v=20260918b"></script>
+  <script src="assets/js/tools-color.js?v=20260918b"></script>
+  <script src="assets/js/tools-css.js?v=20260918b"></script>
+  <script src="assets/js/tools-calc.js?v=20260918b"></script>
+  <script src="assets/js/tools-calc2.js?v=20260918b"></script>
+  <script src="assets/js/tools-text2.js?v=20260918b"></script>
+  <script src="assets/js/tools-gen.js?v=20260918b"></script>
+  <script src="assets/js/tools-color2.js?v=20260918b"></script>
+  <script src="assets/js/tools-math.js?v=20260918b"></script>
+  <script src="assets/js/tools-pass.js?v=20260918b"></script>
+  <script src="assets/js/tools-media.js?v=20260918b"></script>
+  <script src="assets/js/tools-util.js?v=20260918b"></script>
+  <script src="assets/js/app.js?v=20260918b"></script>
 </body>
 </html>
