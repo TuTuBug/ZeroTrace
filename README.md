@@ -31,15 +31,19 @@ toolbox/
 ├── robots.txt              # 搜索引擎抓取规则
 ├── sitemap.xml             # 站点地图（由 scripts/gen-static.js 生成，勿手改）
 ├── scripts/
-│   └── gen-static.js       # 工具页静态化生成器（见「六、SEO：工具页静态化」）
+│   ├── gen-static.js       # 工具页静态化生成器（见「六、SEO：工具页静态化」）
+│   ├── verify-assetsignore.js  # 推送前预演发布清单（见「八、部署」）
+│   ├── verify-nav.js       # 导航与主题引导回归（防闪屏 / 防「返回首页不全」）
+│   └── verify-online.js    # 上线后端到端验证（HTTP / 隐私 / 功能）
 ├── tool/                   # 【生成物】每个工具一份静态页：tool/<id>/index.html
 ├── assets/
 │   ├── og-cover.png        # 社交分享封面图（1200×630）
 │   ├── css/
-│   │   └── style.css       # 全部样式（含响应式、暗色主题）
+│   │   └── style.css       # 全部样式（含响应式、暗色主题、跳转加载遮罩）
 │   └── js/
+│       ├── theme-boot.js   # 【必须留在 <head>、且在 style.css 之前】首屏主题引导，防整页重载时闪主题
 │       ├── util.js         # 注册表 T、分类表 T.categories、工具页 DOM 骨架（静态页与运行时共用）、通用辅助函数
-│       ├── app.js          # 首页渲染、搜索（含防抖）、分类切换、路径路由（兼容 hash）、常用分组
+│       ├── app.js          # 首页渲染、搜索（含防抖）、分类切换、路径路由（兼容 hash）、站内链接接管、常用分组
 │       ├── tools-text.js / tools-text2.js   # 文本工具
 │       ├── tools-dev.js / tools-gen.js      # 开发编码（含 JSON 格式化/去转义）/ 生成器
 │       ├── tools-color.js / tools-color2.js # 颜色图像 / 格式转换
@@ -60,8 +64,11 @@ toolbox/
 
 ## 一、本地运行（3 种方式）
 
-### 方式 A：直接打开（最简单）
-双击 `index.html`，用浏览器打开即可。所有工具离线可用。
+### 方式 A：直接打开（❌ 当前版本已失效，2026-09-18 实测）
+
+双击 `index.html` **已经打不开了**：页内资源全部是绝对路径（`/assets/css/style.css`、`/vendor/qrcode.js`…），在 `file://` 协议下会被解析到文件系统根 `file:///assets/...`，实测**全部 `ERR_FILE_NOT_FOUND`** —— 结果是首页卡片 0 个、CSS 完全不生效。
+
+要恢复这条路，得把所有资源引用改成相对路径（`index.html` 用 `assets/…`，静态页用 `../../assets/…`），并同步放宽 `gen-static.js` 里「禁止相对路径资源」那条自检 —— 属于独立改动，**尚未做**。现在请用方式 B / C。
 
 ### 方式 B：Python 静态服务器（推荐开发用）
 ```bash
@@ -77,6 +84,7 @@ npx serve .          # 或 npx http-server -p 8290
 ```
 
 > ⚠️ 端口可任意指定（如 8290）。服务仅用于本地预览，工具本身不依赖服务器。
+> 注意「离线可用」指的是**打开页面后拔网线照样能用**（零外部请求），不是「用 `file://` 打开」。
 
 ---
 
@@ -212,28 +220,42 @@ T.register({
 - 首页点卡片、点返回走 `history.pushState`，地址栏是干净的 `/tool/<id>/`
 - 老链接 `/#/tool/<id>` 仍然可用，首次加载时自动规范化为干净路径
 - 静态页里已渲染好的 DOM 会被直接接管，只补事件绑定、不重复渲染
-- 用 `file://` 双击打开时自动退化回 hash 路由（`pushState` 在 file 协议下不可用）
+- 用 `file://` 打开时自动退化回 hash 路由（`pushState` 在 file 协议下不可用）—— 这条降级目前是**空转**的，因为 `file://` 下资源本来就加载不出来，见「一、本地运行 › 方式 A」
+- **站内链接由 `app.js` 统一接管**（`document` 上的 click 委托），工具页底部的同类工具 `<a href="/tool/x/">` 不再触发整页重载 —— 它只保留给爬虫看的真实链接形态，运行时一律走 SPA。外链、新标签、`download`、修饰键（Ctrl / Cmd / Shift / Alt）、中键全部放行给浏览器
+
+### 导航与主题引导（防「切工具闪一下」，2026-09-18）
+
+两个线上体感 bug 的成因与修法，都别改回去：
+
+1. **切工具时深浅色闪一下** —— 主题靠 `<html data-theme>` 驱动，而这个属性原先只由页面**底部**的 app.js 写入。整页重载时新文档会先按默认深色画一帧，再翻成浅色。修法有两层，缺一不可：
+   - `assets/js/theme-boot.js` 在 `<head>` 里**同步**写入 `data-theme`（必须在 `style.css` 之前）。它必须是独立外链文件：CSP 里没有 `'unsafe-inline'`，内联脚本会被直接拦掉。`gen-static.js` 会把这个标签原样复制进 155 个静态页并断言先后顺序。
+   - 上面那条「站内链接接管」让绝大多数跳转根本不发生重载。
+2. **「返回」后首页展示不全** —— 静态工具页（`tool/<id>/index.html`）里**没有首页外壳**：`site-header` / `hero`（搜索框、分类导航）/ `site-footer` 都不在 DOM 里。在这类文档上点「返回」如果走 SPA，`#home-view` 的卡片能出来，但整个首页框架是缺的。修法是 `app.js` 里的 `HAS_SHELL` 判断：**当前文档没有外壳时，回首页一律做真导航**（`location.assign('/')`）去取完整的 `index.html`，并由 `#tb-loading` 遮罩盖住这一次跨文档切换。
+
+> 遮罩只给跨文档跳转用。SPA 内部跳转是同步渲染、瞬间完成的，给它加 loading 只会多一次闪。
 
 ### 改完怎么验
 
 ```bash
 python -m http.server 8290
-SITE=http://127.0.0.1:8290/ node .workbuddy/verify-static.js
+SITE=http://127.0.0.1:8290/ node scripts/verify-nav.js     # 导航 / 主题引导回归（21 项）
 ```
 
-> 该验证脚本位于本地工作区 `.workbuddy/`（未纳入版本库），29 项断言覆盖爬虫视角的原始 HTML、禁用 JS 的极端情况、三条路由分支与零外部请求。
+> `verify-nav.js` 覆盖：主题引导在 156 个页面里的引入与顺序、首屏主题与背景色、点同类工具链接不重载、四条「回首页」路径的完整性、前进后退、搜索恢复、外链与修饰键放行。
+> 断言「点击后有没有整页重载」时用 `page.on('load')` 计数，**不要用 `framenavigated`** —— Playwright 在 `pushState` 这类同文档导航上也会触发后者，两者区分不开。
 
 ---
 
 ## 七、发布前检查
 
-1. **改过 `assets/` 或 `vendor/` 下任何文件后，同步更新 `?v=YYYYMMDD`**（当前为 `?v=20260916b`）。`index.html` 与 `tool/*/index.html` 用的是同一个版本号，改完跑一次 `node scripts/gen-static.js` 即可让静态页自动跟随（版本号由脚本从 `index.html` 提取，不需要手改两处）。否则浏览器会继续吃旧缓存，出现「本地明明改了、线上没变」的假故障。
+1. **改过 `assets/` 或 `vendor/` 下任何文件后，同步更新 `?v=YYYYMMDD`**（当前为 `?v=20260918`）。`index.html` 与 `tool/*/index.html` 用的是同一个版本号，改完跑一次 `node scripts/gen-static.js` 即可让静态页自动跟随（版本号由脚本从 `index.html` 提取，不需要手改两处）。否则浏览器会继续吃旧缓存，出现「本地明明改了、线上没变」的假故障。
 2. **新增 / 改名 / 改描述任何工具后，重跑 `node scripts/gen-static.js`**，让静态页与 `sitemap.xml` 跟上注册表；漏跑会导致线上老页面与新工具不一致。
 3. **新增 `tools-*.js` 时**，确认已在 `index.html` 底部按序补上 `<script>`——漏加会让该分类全部工具静默消失，且控制台不报错。
 4. **调整 CSP 后**，到浏览器控制台确认没有 `Refused to ...` 报错，并回归验证三处：科学计算器（依赖 `new Function`）、图片类工具（依赖 `blob:` 预览与下载）、二维码（内联 SVG DOM）。
 5. **新增任何站外资源前请三思**：`connect-src 'none'`、`img-src` 白名单是本站的核心承诺，刻意不放行站外请求。
 6. **改动部署相关文件（`.assetsignore`、`scripts/`）后**，先跑 `node scripts/verify-assetsignore.js` 预演发布清单，再推送 —— 别再让 `.git` 之类的文件上线（见「八、部署」）。
 7. **推送并等构建完成后**，跑 `SITE=https://tool.dmi.ccwu.cc/ node scripts/verify-online.js` 复验线上（见「八、部署 › 上线后复验」）。这一步能同时抓出「静态页没生成」「敏感文件又漏出去」「CSP 把某个工具打挂」三类问题。
+8. **动过导航、路由、主题（`app.js` / `theme-boot.js` / `style.css` 的跳转与主题部分）后**，跑 `node scripts/verify-nav.js`：它会盯着「点同类工具链接不许整页重载」「四条回首页路径都必须拿到完整首页」「主题引导必须排在样式表之前」这几条容易改回去的约定。
 
 ---
 
@@ -275,7 +297,7 @@ https://tool.dmi.ccwu.cc/.git/FETCH_HEAD → 200
 node scripts/verify-assetsignore.js
 ```
 
-输出「实际会发布 177 个文件」（155 工具页 + 17 assets + 3 根文件 + 2 vendor）+ 25 项断言：必须发布的没被误伤、必须排除的确实挡住、`.git` 残留必须为 0、工具页数量与 `tool/` 目录数一致。断言失败时退出码为 1，可直接用于 CI。
+输出「实际会发布 178 个文件」（155 工具页 + 18 assets + 3 根文件 + 2 vendor）+ 25 项断言：必须发布的没被误伤、必须排除的确实挡住、`.git` 残留必须为 0、工具页数量与 `tool/` 目录数一致。断言失败时退出码为 1，可直接用于 CI。
 
 > 脚本用 `ignore` 库（wrangler 内部用的就是同一个 gitignore 实现）复现过滤逻辑；找不到时会提示 `npm install ignore@5.3.1`。它只在本地校验，不参与构建、也不会被发布（`scripts/` 已在 `.assetsignore` 中排除）。
 

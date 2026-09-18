@@ -56,7 +56,13 @@ const VER = pick(/\?v=([\w.\-]+)/, '资源版本号 ?v=');
 const CSP = pick(/<meta http-equiv="Content-Security-Policy" content="([^"]*)"/, 'CSP');
 const FAVICON = pick(/<link rel="icon" href="([^"]*)"/, 'favicon');
 const THEME = pick(/<meta name="theme-color" content="([^"]*)"/, 'theme-color');
+/* 首屏主题引导脚本：必须和 index.html 一样出现在 <head> 里、且在样式表之前，
+   否则静态页重载时会先闪一下默认深色。它不能混在下面的 body 脚本列表里，
+   那样会被挪到 </body> 前执行 —— 时机就没了。 */
+const BOOT = (indexHTML.match(/<script src="[^"]*theme-boot\.js[^"]*"><\/script>/) || [])[0];
+if (!BOOT) throw new Error('未能在 index.html 中找到 theme-boot.js（首屏主题引导，缺失会导致整页重载时闪主题）');
 const SCRIPTS = (indexHTML.match(/<script src="[^"]+"><\/script>/g) || [])
+  .filter(s => !/theme-boot\.js/.test(s))
   .map(s => '  ' + s).join('\n');
 if (!SCRIPTS) throw new Error('未能在 index.html 中找到任何 <script src>');
 
@@ -121,6 +127,7 @@ function pageHTML(t) {
   <meta name="twitter:image" content="${SITE}/assets/og-cover.png" />
   <meta name="theme-color" content="${THEME}" />
   <link rel="icon" href="${FAVICON}" />
+  ${BOOT}
   <link rel="stylesheet" href="/assets/css/style.css?v=${VER}" />
 </head>
 <body class="tool-open">
@@ -173,6 +180,13 @@ for (const t of T.tools) {
   if (!/<h1/.test(s)) bad.push(t.id + ' 缺 h1');
   if (!s.includes('href="/tool/') && T.tools.length > 1) bad.push(t.id + ' 缺同类内链');
   if (/src="(?!\/|https?:|data:)/.test(s)) bad.push(t.id + ' 含相对路径资源');
+  /* 主题引导必须在样式表之前：放到后面等于没放（照样先按默认深色画一帧） */
+  const iBoot = s.indexOf('theme-boot.js');
+  const iCss = s.indexOf('style.css');
+  if (iBoot < 0) bad.push(t.id + ' 缺 theme-boot.js（重载时会闪主题）');
+  else if (iBoot > iCss) bad.push(t.id + ' theme-boot.js 不在样式表之前');
+  /* 静态页不该出现首页外壳：它只有 <main>，返回首页靠 app.js 做真导航 */
+  if (/id="hero-count"/.test(s)) bad.push(t.id + ' 混入了首页外壳');
 }
 
 /* ---------- 7. 报告 ---------- */

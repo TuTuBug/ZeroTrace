@@ -30,17 +30,50 @@
   }
   const favTools = () => favs.map(id => T.tools.find(t => t.id === id)).filter(Boolean);
 
-  /* 主题 */
-  const savedTheme = localStorage.getItem('tb-theme') || 'dark';
-  document.documentElement.setAttribute('data-theme', savedTheme);
-  function toggleTheme() {
-    const cur = document.documentElement.getAttribute('data-theme');
-    const next = cur === 'dark' ? 'light' : 'dark';
+  /* 主题
+     首屏已经由 <head> 里的 theme-boot.js 同步写好 data-theme（整页重载时
+     才不会先闪一下默认深色），这里只负责「切换 + 持久化」。
+     ⚠️ 启动时不要再 setAttribute 一次：属性值没变也会触发一次 mutation，
+     在浅色用户那里就是一次无意义的属性抖动。 */
+  const THEME_BG = { dark: '#0f1117', light: '#f5f7fb' };
+  function applyTheme(next) {
     document.documentElement.setAttribute('data-theme', next);
-    localStorage.setItem('tb-theme', next);
+    try { localStorage.setItem('tb-theme', next); } catch (e) {}
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', THEME_BG[next] || THEME_BG.dark);
+    window.TB_THEME = next;
+  }
+  function toggleTheme() {
+    applyTheme(document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
   }
   const themeBtn = document.getElementById('theme-toggle');
   if (themeBtn) themeBtn.onclick = toggleTheme;
+
+  /* ============ 站内跳转的加载遮罩 ============
+     SPA 内部的跳转（首页 ↔ 工具、工具 ↔ 工具）是同步渲染，瞬间完成，
+     加遮罩只会闪；真正需要盖一下的是**跨文档跳转**（例：从静态工具页
+     回首页），那时页面会被整个替换。兜底超时用于「导航被取消」的情况。 */
+  let loadTimer = null;
+  function hideLoading() {
+    clearTimeout(loadTimer);
+    document.body.classList.remove('tb-loading-on');
+  }
+  function showLoading(text) {
+    let el = document.getElementById('tb-loading');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'tb-loading';
+      el.innerHTML = '<div class="tb-loading-box"><span class="tb-spinner"></span>'
+        + '<span class="tb-loading-txt"></span></div>';
+      document.body.appendChild(el);
+    }
+    el.querySelector('.tb-loading-txt').textContent = text || '加载中…';
+    document.body.classList.add('tb-loading-on');
+    clearTimeout(loadTimer);
+    loadTimer = setTimeout(hideLoading, 5000);
+  }
+  /* 从 bfcache 返回时 DOM 是原样带回来的，遮罩可能还亮着 → 清掉 */
+  window.addEventListener('pageshow', hideLoading);
 
   /* 分类导航（含「我的常用」） */
   function renderCatNav() {
@@ -145,8 +178,10 @@
        否则带 setInterval / canvas 的工具会被初始化两次 */
     if (sameTool && mode === 'tool') { window.scrollTo(0, 0); return; }
 
-    // 进入前记录首页状态，供返回时还原
-    homeState = { curCat, query, search: search ? search.value : '', scrollY: window.scrollY };
+    // 进入前记录首页状态，供返回时还原。
+    // ⚠️ 只在「从首页出发」时记录：工具页之间互跳时若也记录，会把工具页的
+    // 滚动位置当成首页的滚动位置存下来，返回首页就跳到莫名其妙的中间位置。
+    if (mode === 'home') homeState = { curCat, query, search: search ? search.value : '', scrollY: window.scrollY };
     document.body.classList.add('tool-open');
     toolView.hidden = false; homeView.hidden = true;
 
@@ -183,13 +218,53 @@
   let canPush = true;
   /* file:// 直接打开时 replaceState/pushState 会抛 SecurityError → 提前探测并退化到 hash */
   try { history.replaceState(history.state, '', location.href); } catch (e) { canPush = false; }
+
+  /* 当前文档里有没有「首页外壳」（页头 / Hero 搜索框与分类导航 / 页脚）。
+     index.html 有；tool/<id>/index.html 这份静态页**没有**（见 gen-static.js
+     的模板：只有 <main> + #tool-view + #toast）。 */
+  const HAS_SHELL = !!document.querySelector('.site-header');
+  const IS_HTTP = /^https?:$/.test(location.protocol);
+
   function nav(path) {
+    /* 静态工具页 → 首页必须是**真导航**：这种文档里没有 site-header / hero /
+       footer，若走 SPA 只把卡片塞进 #home-view，用户看到的就是一个没有页头、
+       没有搜索框、没有分类导航、没有页脚的残缺首页（2026-09-18 反馈的原话
+       「返回到首页，首页展示的不全」）。让浏览器去取完整的 index.html。 */
+    if (!HAS_SHELL && IS_HTTP && path === '/') {
+      /* 从 /tool/<id>/ 反推首页，顺带支持部署在子路径下（/sub/tool/<id>/ → /sub/）。
+         反推不出来就老实用 '/'，绝不 assign 到当前地址把自己转成死循环。 */
+      const home = /\/tool\/[^/]+\/?$/.test(location.pathname)
+        ? location.pathname.replace(/\/tool\/[^/]+\/?$/, '/') : '/';
+      showLoading('正在返回首页…');
+      location.assign(home);
+      return;
+    }
     if (canPush) {
       try { history.pushState({}, '', path); route(); return; }
       catch (e) { canPush = false; }
     }
     location.hash = '#' + path;
   }
+
+  /* 接管站内链接的点击，避免整页重载。
+     工具页底部的「同类工具」是真 <a href="/tool/x/">（为了给爬虫一张内链网，
+     见 util.js 的 seoSectionHTML）。不接管的话每点一次都重载整个应用：慢，
+     而且新文档要等底部 app.js 执行完才能把主题写上 —— 就是那个深浅色闪屏。
+     静态页里的 <a> 也照样接管（工具视图 = toolViewHTML() 现场重建，两边同源）。
+     注意：只拦「普通左键点击」，外链 / 新标签 / 下载 / 修饰键一律放行。 */
+  document.addEventListener('click', (e) => {
+    if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    const a = e.target && e.target.closest ? e.target.closest('a[href]') : null;
+    if (!a || a.target === '_blank' || a.hasAttribute('download')) return;
+    const raw = a.getAttribute('href');
+    if (!raw || raw.charAt(0) === '#') return;
+    let url;
+    try { url = new URL(raw, location.href); } catch (err) { return; }
+    if (url.origin !== location.origin) return;                       // GitHub 等外链照常
+    if (url.pathname !== '/' && !/^\/tool\/[^/]+\/$/.test(url.pathname)) return; // 只接管首页与工具页
+    e.preventDefault();
+    nav(url.pathname + url.search);
+  });
 
   function route() {
     const id = parseRoute();
