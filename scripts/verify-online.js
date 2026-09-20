@@ -2,7 +2,7 @@
 /**
  * 端到端验证：HTTP 层 + 真实浏览器层
  *
- *   SITE=https://tool.dmi.ccwu.cc/ node scripts/verify-online.js
+ *   SITE=https://tool.wululu.xyz/ node scripts/verify-online.js
  *   node scripts/verify-online.js                       # 默认验本地 127.0.0.1:8290
  *   SHOT=1 SITE=... node scripts/verify-online.js       # 额外存一张首页截图
  *
@@ -127,7 +127,7 @@ const PLATFORM_BEACON = /cloudflareinsights\.com|cloudflare\.com\/beacon/;
 
   /* C2. 二维码（内联 SVG，受 CSP 管控） */
   await page.goto(ORIGIN + '/#/tool/qr', { waitUntil: 'networkidle' });
-  await page.fill('#qr-in', 'https://tool.dmi.ccwu.cc/');
+  await page.fill('#qr-in', 'https://tool.wululu.xyz/');
   await page.click('#qr-go');
   await page.waitForTimeout(500);
   const qr = await page.evaluate(() => {

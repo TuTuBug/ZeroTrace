@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://tool.dmi.ccwu.cc/sitemap.xml
+Sitemap: https://tool.wululu.xyz/sitemap.xml

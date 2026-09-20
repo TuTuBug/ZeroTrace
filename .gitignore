@@ -3,3 +3,8 @@
 
 # wrangler 本地构建缓存（跑 wrangler deploy --dry-run / dev 时生成）
 .wrangler/
+
+# 百度推送准入密钥与推送进度：只存本地，绝不入库
+# （scripts/ 整个目录已被 .assetsignore 排除，不会发布到线上；这里再挡一层 git）
+scripts/.baidu-token
+scripts/.baidu-push-state.json

@@ -257,6 +257,26 @@ SITE=http://127.0.0.1:8290/ node scripts/verify-nav.js     # 导航 / 主题引�
 >
 > 「静态工具页 → 首页」是**跨文档**导航，等它落定要用 `waitForURL` + `waitForFunction`（见脚本里的 `waitHome()`），**别用固定 `sleep`**：本地 http.server 毫秒级、线上要等 19 个脚本回来，同一个 1200ms 本地稳过、线上必挂（2026-09-18 踩过，差点误判成产品 bug）。
 
+### 域名与主站归属（2026-09-20 起：主域名 = `tool.wululu.xyz`）
+
+同一份 Workers 部署**同时绑定两个域名**，两边返回完全相同的 HTML：
+
+| 域名 | 角色 |
+|---|---|
+| `https://tool.wululu.xyz/` | **主域名**：canonical / og:url / sitemap / robots / 百度推送 全部指向这里 |
+| `https://tool.dmi.ccwu.cc/` | 旧域名，仍可访问；但已不是 canonical，百度会把它当作重复内容 |
+
+两个域名各有一条百度站点验证 meta，**都保留**（`codeva-HgaIktYcr4` → wululu，`codeva-ZHd6yJX9mT` → dmi.ccwu.cc）——百度会定期复验，删掉哪条对应域名就掉验证。
+
+**改域名时必须一起改的四处**（缺一处就会出现「sitemap 提交的是 A 域名、页面 canonical 是 B 域名」的分裂状态）：
+
+1. `scripts/gen-static.js` 的 `const SITE` → 重跑 `node scripts/gen-static.js`（连带重写 `sitemap.xml` 与 155 个工具页的 canonical / og:url，别手改 sitemap）
+2. `index.html` 的 `canonical` / `og:url` / `og:image` / `twitter:image`
+3. `robots.txt` 的 `Sitemap:` 一行
+4. `scripts/baidu-push.js` 的 `const SITE` → 重跑 `node scripts/gen-baidu-batches.js` 重生成 `baidu-urls*.txt`
+
+> ⚠️ **百度推送 token 是按站点签发的**：`.baidu-token` 里的 token 与 `site=` 参数是一对，换域名后需要在百度搜索资源平台用新域名重新验证、拿新 token，否则接口会返回 `site error` / `not_same_site`。另外 `scripts/.baidu-push-state.json` 里记的是**完整 URL**，换域名后旧记录自然全部失配，等于从 0 开始推。
+
 ---
 
 ## 七、发布前检查
@@ -268,7 +288,7 @@ SITE=http://127.0.0.1:8290/ node scripts/verify-nav.js     # 导航 / 主题引�
 5. **调整 CSP 后**，到浏览器控制台确认没有 `Refused to ...` 报错，并回归验证三处：科学计算器（依赖 `new Function`）、图片类工具（依赖 `blob:` 预览与下载）、二维码（内联 SVG DOM）。
 6. **新增任何站外资源前请三思**：`connect-src 'none'`、`img-src` 白名单是本站的核心承诺，刻意不放行站外请求。
 7. **改动部署相关文件（`.assetsignore`、`scripts/`）后**，先跑 `node scripts/verify-assetsignore.js` 预演发布清单，再推送 —— 别再让 `.git` 之类的文件上线（见「八、部署」）。
-8. **推送并等构建完成后**，跑 `SITE=https://tool.dmi.ccwu.cc/ node scripts/verify-online.js` 复验线上（见「八、部署 › 上线后复验」）。这一步能同时抓出「静态页没生成」「敏感文件又漏出去」「CSP 把某个工具打挂」三类问题。
+8. **推送并等构建完成后**，跑 `SITE=https://tool.wululu.xyz/ node scripts/verify-online.js` 复验线上（见「八、部署 › 上线后复验」）。这一步能同时抓出「静态页没生成」「敏感文件又漏出去」「CSP 把某个工具打挂」三类问题。
 9. **动过导航、路由、主题、卡片结构（`app.js` / `theme-boot.js` / `style.css`）后**，跑 `node scripts/verify-nav.js`：它会盯着「点同类工具链接不许整页重载」「四条回首页路径都必须拿到完整首页」「主题引导必须排在样式表之前」「卡片必须还是真 `<a>`、星标不许误跳」「`file://` 双击打开必须能用」这几条容易改回去的约定。
 
 ---
@@ -292,6 +312,8 @@ Cloudflare **Pages 会自动排除** `.git`、`node_modules`、`.DS_Store` 等�
 ```
 
 其余一律照发。本项目正是栽在这个差异上 —— 线上曾可直接下载：
+
+（当时域名是 `tool.dmi.ccwu.cc`，2026-09-20 起主域名换为 `tool.wululu.xyz`，但同一份部署两个域名都在跑，这些路径两个域名下都还能复现 —— 所以下面这些 `404` 断言至今仍是有效回归项。）
 
 ```
 https://tool.dmi.ccwu.cc/.git/index      → 200（含全部文件名 + 每个文件 SHA1 + mtime）
@@ -340,7 +362,7 @@ node scripts/gen-static.js && npx wrangler deploy
 **推送后的本地预演只能证明「会发什么」，证明不了「发出去之后是不是好的」。** 每次上线后跑一次线上端到端（真实 Chrome，22 项断言）：
 
 ```bash
-SITE=https://tool.dmi.ccwu.cc/ node scripts/verify-online.js   # 验线上
+SITE=https://tool.wululu.xyz/ node scripts/verify-online.js   # 验线上
 node scripts/verify-online.js                                  # 不传 SITE 则验本地 127.0.0.1:8290
 SHOT=1 SITE=... node scripts/verify-online.js                  # 额外存一张首页截图
 ```

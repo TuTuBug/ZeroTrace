@@ -41,7 +41,7 @@ const path = require('path');
 const ROOT = path.resolve(__dirname, '..');
 const JS_DIR = path.join(ROOT, 'assets', 'js');
 const TOOL_DIR = path.join(ROOT, 'tool');
-const SITE = 'https://tool.dmi.ccwu.cc';
+const SITE = 'https://tool.wululu.xyz';
 
 /* ---------- 1. 从 index.html 提取必须保持一致的公共部分 ----------
    全部靠提取而不是硬编码：一旦首页改了版本号/CSP/脚本列表，静态页

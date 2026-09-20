@@ -267,7 +267,7 @@
       <div class="tool-panel">
         <h2>🔳 二维码生成</h2>
         <p class="t-sub">在浏览器本地生成二维码，内容不会上传。</p>
-        <div class="field"><label>内容（文本 / 网址）</label><textarea id="qr-in" style="min-height:90px">https://tool.dmi.ccwu.cc/</textarea></div>
+        <div class="field"><label>内容（文本 / 网址）</label><textarea id="qr-in" style="min-height:90px">https://tool.wululu.xyz/</textarea></div>
         <div class="row">
           <div class="field"><label>容错级别</label>
             <select id="qr-ec"><option value="L">L 低</option><option value="M" selected>M 中</option><option value="Q">Q 较高</option><option value="H">H 高</option></select>
